@@ -333,28 +333,42 @@ body, html, #root {
   outline: none;
 }
 
-/* Inspector Overlay (#inspectorSemantico) */
+/* Modal Backdrop Overlay */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Centered Inspector Modal (#inspectorSemantico) */
 #inspectorSemantico {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  width: 350px;
-  background: var(--bg-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  width: 550px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--bg-overlay);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  z-index: 110;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  position: relative;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .window-header {
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
@@ -362,10 +376,67 @@ body, html, #root {
 }
 
 .window-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+/* Collapsible Sections */
+.collapsible-section {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.collapsible-header {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  transition: background-color 0.15s ease;
+}
+
+.collapsible-header:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.collapsible-header .caret {
+  transition: transform 0.2s ease;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.collapsible-header.open .caret {
+  transform: rotate(90deg);
+}
+
+.collapsible-content {
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  border-top: 1px solid var(--border-color);
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Validation Style */
+.input-error {
+  border-color: var(--color-proyecto) !important;
+}
+
+.error-message {
+  font-size: 0.75rem;
+  color: var(--color-proyecto);
+  margin-top: 2px;
 }
 
 .form-group {
@@ -479,4 +550,14 @@ body, html, #root {
 .node-delete-btn:hover {
   color: var(--color-proyecto); /* Red color for delete action */
   background-color: rgba(243, 139, 168, 0.1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

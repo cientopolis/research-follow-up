@@ -16,6 +16,37 @@ interface RDFConnection {
   predicate: string;
 }
 
+const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string; validation?: (val: string) => string | null }[] } = {
+  'FacultyMember': [
+    { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://example.org/resource/status', label: 'Estado' }
+  ],
+  'GraduateStudent': [
+    { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://example.org/resource/status', label: 'Estado' },
+    { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis' }
+  ],
+  'UndergraduateStudent': [
+    { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://example.org/resource/status', label: 'Estado' },
+    { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis de Grado' }
+  ],
+  'Project': [
+    { uri: 'http://example.org/resource/status', label: 'Estado' },
+    { uri: 'http://example.org/resource/grantNumber', label: 'Número de Subsidio' },
+    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Inicio (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
+    { uri: 'http://example.org/resource/endDate', label: 'Fecha de Fin (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
+  ],
+  'Article': [
+    { uri: 'http://example.org/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
+    { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' },
+    { uri: 'https://dblp.org/rdf/schema#journal', label: 'Journal / Revista' }
+  ],
+  'Topic': [
+    { uri: 'http://example.org/resource/description', label: 'Descripción' }
+  ]
+};
+
 export default function App() {
   const isDev = import.meta.env.DEV;
   const [nodes, setNodes] = useState<RDFNode[]>([]);
@@ -24,6 +55,15 @@ export default function App() {
   const [selectedConnection, setSelectedConnection] = useState<RDFConnection | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState<RDFNode | null>(null);
+
+  // Inspector property editing states
+  const [nodeDetails, setNodeDetails] = useState<{ [predURI: string]: string }>({});
+  const [availableProperties, setAvailableProperties] = useState<string[]>([]);
+  const [openSections, setOpenSections] = useState({ basic: true, ontology: true, meta: false });
+  const [validationErrors, setValidationErrors] = useState<{ [predURI: string]: string }>({});
+  const [newPropURI, setNewPropURI] = useState('');
+  const [newPropVal, setNewPropVal] = useState('');
+  const [isAddingCustomProp, setIsAddingCustomProp] = useState(false);
   
   // Navigation / Canvas Transforms
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -158,9 +198,179 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
+  const getPredefinedProperties = (typeURI: string) => {
+    if (typeURI.includes('FacultyMember')) return DEFAULT_PROPERTIES_BY_TYPE['FacultyMember'];
+    if (typeURI.includes('GraduateStudent')) return DEFAULT_PROPERTIES_BY_TYPE['GraduateStudent'];
+    if (typeURI.includes('UndergraduateStudent')) return DEFAULT_PROPERTIES_BY_TYPE['UndergraduateStudent'];
+    if (typeURI.includes('Project')) return DEFAULT_PROPERTIES_BY_TYPE['Project'];
+    if (typeURI.includes('Article')) return DEFAULT_PROPERTIES_BY_TYPE['Article'];
+    if (typeURI.includes('Topic')) return DEFAULT_PROPERTIES_BY_TYPE['Topic'];
+    return [];
+  };
+
+  const fetchNodeDetails = async (nodeURI: string) => {
+    const query = `
+      SELECT ?predicate ?value WHERE {
+        <${nodeURI}> ?predicate ?value .
+        FILTER(isLiteral(?value))
+      }
+    `;
+    try {
+      const res = await fetch('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const data = await res.json();
+      if (data.results && data.results.bindings) {
+        const props: { [predURI: string]: string } = {};
+        data.results.bindings.forEach((b: any) => {
+          props[b.predicate.value] = b.value.value;
+        });
+        // Asegurarse de que rdfs:label siempre exista
+        if (!props['http://www.w3.org/2000/01/rdf-schema#label']) {
+          const matched = nodes.find(n => n.uri === nodeURI);
+          props['http://www.w3.org/2000/01/rdf-schema#label'] = matched ? matched.label : '';
+        }
+        setNodeDetails(props);
+      }
+    } catch (e) {
+      console.error("Error loading node details", e);
+    }
+  };
+
+  const fetchAllDatatypeProperties = async () => {
+    const query = `
+      SELECT DISTINCT ?prop WHERE {
+        { ?prop a <http://www.w3.org/2002/07/owl#DatatypeProperty> . }
+        UNION
+        { ?s ?prop ?o . FILTER(isLiteral(?o)) }
+        FILTER(?prop != <http://example.org/resource/posX> && ?prop != <http://example.org/resource/posY> && ?prop != <http://www.w3.org/2000/01/rdf-schema#label> && ?prop != <http://example.org/resource/status>)
+      }
+    `;
+    try {
+      const res = await fetch('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const data = await res.json();
+      if (data.results && data.results.bindings) {
+        const list = data.results.bindings.map((b: any) => b.prop.value);
+        setAvailableProperties(list);
+      }
+    } catch (e) {
+      console.error("Error loading datatype properties", e);
+    }
+  };
+
+  // Sync node selection and details
+  useEffect(() => {
+    if (selectedNode && isInspectorOpen) {
+      fetchNodeDetails(selectedNode.uri);
+    } else {
+      setNodeDetails({});
+      setValidationErrors({});
+    }
+  }, [selectedNode, isInspectorOpen]);
+
+  // Load all datatypes on mount
   useEffect(() => {
     fetchGraphData();
+    fetchAllDatatypeProperties();
   }, []);
+
+  const handlePropertyChange = (predicateURI: string, value: string, validationFn?: (val: string) => string | null) => {
+    setNodeDetails(prev => ({ ...prev, [predicateURI]: value }));
+    if (validationFn) {
+      const err = validationFn(value);
+      setValidationErrors(prev => ({ ...prev, [predicateURI]: err || '' }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, [predicateURI]: '' }));
+    }
+  };
+
+  const saveNodeProperties = async () => {
+    if (!selectedNode) return;
+    
+    // Validate all predefined properties first
+    const errors: { [predURI: string]: string } = {};
+    let hasErrors = false;
+
+    const labelVal = nodeDetails['http://www.w3.org/2000/01/rdf-schema#label'] || '';
+    if (!labelVal.trim()) {
+      errors['http://www.w3.org/2000/01/rdf-schema#label'] = 'La etiqueta no puede estar vacía';
+      hasErrors = true;
+    }
+
+    const preProps = getPredefinedProperties(selectedNode.type);
+    preProps.forEach(p => {
+      if (p.validation) {
+        const val = nodeDetails[p.uri] || '';
+        const err = p.validation(val);
+        if (err) {
+          errors[p.uri] = err;
+          hasErrors = true;
+        }
+      }
+    });
+
+    if (hasErrors) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    // Build SPARQL Update Query
+    const predicatesToClear = [
+      'http://www.w3.org/2000/01/rdf-schema#label',
+      ...preProps.map(p => p.uri),
+      ...Object.keys(nodeDetails).filter(k => !k.startsWith('http://www.w3.org/2000/01/rdf-schema#') && !preProps.some(p => p.uri === k))
+    ];
+
+    const filterList = predicatesToClear.map(p => `<${p}>`).join(', ');
+
+    // Filter nodeDetails to only insert non-empty values
+    const insertTriples = Object.entries(nodeDetails)
+      .filter(([_, val]) => val.trim() !== '')
+      .map(([pred, val]) => `<${selectedNode.uri}> <${pred}> "${val.replace(/"/g, '\\"')}" .`)
+      .join('\n        ');
+
+    const updateQuery = `
+      DELETE {
+        <${selectedNode.uri}> ?p ?o .
+      }
+      INSERT {
+        ${insertTriples}
+      }
+      WHERE {
+        OPTIONAL {
+          <${selectedNode.uri}> ?p ?o .
+          FILTER(?p IN (${filterList}))
+        }
+      }
+    `;
+
+    try {
+      const res = await fetch('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: updateQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Update local state label
+        const newLabel = nodeDetails['http://www.w3.org/2000/01/rdf-schema#label'] || selectedNode.label;
+        const newStatus = nodeDetails['http://example.org/resource/status'] || selectedNode.status;
+        setNodes(nodes.map(n => n.uri === selectedNode.uri ? { ...n, label: newLabel, status: newStatus } : n));
+        
+        setIsInspectorOpen(false);
+        setSelectedNode(null);
+        fetchGraphData();
+      }
+    } catch (e) {
+      console.error("Error saving properties", e);
+    }
+  };
 
   // Seed Data Loader
   const loadSeedData = async () => {
@@ -618,69 +828,218 @@ SELECT ?s ?p ?o WHERE {
         </div>
       </div>
 
-      {/* Floating Property Inspector (#inspectorSemantico) */}
+      {/* Centered Property Inspector Modal Backdrop */}
       {isInspectorOpen && (selectedNode || selectedConnection) && (
-        <div id="inspectorSemantico">
-          {isDev && <span className="dev-tag-badge">#inspectorSemantico</span>}
-          <div className="window-header">
-            <h3>Inspector Semántico</h3>
-            <button className="btn" onClick={() => { setSelectedNode(null); setSelectedConnection(null); setIsInspectorOpen(false); }}>Cerrar</button>
-          </div>
-          <div className="window-body">
-            {selectedNode && (
-              <>
-                <div className="form-group">
-                  <label>URI</label>
-                  <input type="text" value={selectedNode.uri} readOnly />
-                </div>
-                <div className="form-group">
-                  <label>Etiqueta (rdfs:label)</label>
-                  <input 
-                    type="text" 
-                    value={selectedNode.label} 
-                    onChange={async (e) => {
-                      const newLabel = e.target.value;
-                      setNodes(nodes.map(n => n.uri === selectedNode.uri ? { ...n, label: newLabel } : n));
-                      setSelectedNode({ ...selectedNode, label: newLabel });
-                      
-                      // SPARQL update for label
-                      const query = `
-                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-                         DELETE { <${selectedNode.uri}> rdfs:label ?label }
-                         INSERT { <${selectedNode.uri}> rdfs:label "${newLabel}" }
-                         WHERE { OPTIONAL { <${selectedNode.uri}> rdfs:label ?label } }
-                      `;
-                      await fetch('/api/sparql', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query })
-                      });
-                    }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Clase RDF (rdf:type)</label>
-                  <input type="text" value={selectedNode.type} readOnly />
-                </div>
-              </>
-            )}
+        <div className="modal-backdrop" onClick={() => { setSelectedNode(null); setSelectedConnection(null); setIsInspectorOpen(false); }}>
+          <div id="inspectorSemantico" onClick={(e) => e.stopPropagation()}>
+            {isDev && <span className="dev-tag-badge">#inspectorSemantico</span>}
+            <div className="window-header">
+              <h3>Inspector Semántico {selectedNode ? ' - Nodo' : ' - Conector'}</h3>
+              <button className="btn" onClick={() => { setSelectedNode(null); setSelectedConnection(null); setIsInspectorOpen(false); }}>Cerrar</button>
+            </div>
+            
+            <div className="window-body">
+              {selectedNode && (
+                <>
+                  {/* Sección 1: Datos Básicos */}
+                  <div className="collapsible-section">
+                    <div 
+                      className={`collapsible-header ${openSections.basic ? 'open' : ''}`}
+                      onClick={() => setOpenSections({ ...openSections, basic: !openSections.basic })}
+                    >
+                      <span>📂 Datos Básicos</span>
+                      <span className="caret">▶</span>
+                    </div>
+                    {openSections.basic && (
+                      <div className="collapsible-content">
+                        <div className="form-group">
+                          <label>Nombre / Etiqueta (rdfs:label)</label>
+                          <input 
+                            type="text" 
+                            className={validationErrors['http://www.w3.org/2000/01/rdf-schema#label'] ? 'input-error' : ''}
+                            value={nodeDetails['http://www.w3.org/2000/01/rdf-schema#label'] || ''} 
+                            onChange={(e) => handlePropertyChange('http://www.w3.org/2000/01/rdf-schema#label', e.target.value)} 
+                          />
+                          {validationErrors['http://www.w3.org/2000/01/rdf-schema#label'] && (
+                            <span className="error-message">{validationErrors['http://www.w3.org/2000/01/rdf-schema#label']}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-            {selectedConnection && (
-              <>
-                <div className="form-group">
-                  <label>Sujeto (From)</label>
-                  <input type="text" value={getCleanLabel(selectedConnection.from)} readOnly />
-                </div>
-                <div className="form-group">
-                  <label>Predicado (Property)</label>
-                  <input type="text" value={getCleanLabel(selectedConnection.predicate)} readOnly />
-                </div>
-                <div className="form-group">
-                  <label>Objeto (To)</label>
-                  <input type="text" value={getCleanLabel(selectedConnection.to)} readOnly />
-                </div>
-              </>
-            )}
+                  {/* Sección 2: Propiedades específicas de Ontología */}
+                  <div className="collapsible-section">
+                    <div 
+                      className={`collapsible-header ${openSections.ontology ? 'open' : ''}`}
+                      onClick={() => setOpenSections({ ...openSections, ontology: !openSections.ontology })}
+                    >
+                      <span>🛠️ Propiedades de la Ontología</span>
+                      <span className="caret">▶</span>
+                    </div>
+                    {openSections.ontology && (
+                      <div className="collapsible-content">
+                        {/* Renderizar propiedades sugeridas fijas */}
+                        {getPredefinedProperties(selectedNode.type).map((prop) => {
+                          const val = nodeDetails[prop.uri] || '';
+                          const error = validationErrors[prop.uri];
+                          return (
+                            <div className="form-group" key={prop.uri}>
+                              <label>{prop.label} ({getCleanLabel(prop.uri)})</label>
+                              <input 
+                                type="text"
+                                className={error ? 'input-error' : ''}
+                                placeholder="Ej: No asignado"
+                                value={val}
+                                onChange={(e) => handlePropertyChange(prop.uri, e.target.value, prop.validation)}
+                              />
+                              {error && <span className="error-message">{error}</span>}
+                            </div>
+                          );
+                        })}
+
+                        {/* Renderizar otras propiedades personalizadas asignadas */}
+                        {Object.entries(nodeDetails)
+                          .filter(([uri]) => {
+                            // Ocultar labels, status predefinidos, o propiedades sugeridas fijas
+                            const isLabel = uri === 'http://www.w3.org/2000/01/rdf-schema#label';
+                            const isPredefined = getPredefinedProperties(selectedNode.type).some(p => p.uri === uri);
+                            return !isLabel && !isPredefined;
+                          })
+                          .map(([uri, val]) => (
+                            <div className="form-group" key={uri}>
+                              <label>{getCleanLabel(uri)}</label>
+                              <div className="flex-row">
+                                <input 
+                                  type="text" 
+                                  value={val} 
+                                  onChange={(e) => handlePropertyChange(uri, e.target.value)} 
+                                />
+                                <button 
+                                  className="btn" 
+                                  style={{ color: 'var(--color-proyecto)', padding: '8px' }}
+                                  onClick={() => {
+                                    const updated = { ...nodeDetails };
+                                    delete updated[uri];
+                                    setNodeDetails(updated);
+                                  }}
+                                  title="Quitar propiedad"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                        {/* Agregar otra propiedad (Dropdown de asistencia) */}
+                        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-color)' }}>
+                          {!isAddingCustomProp ? (
+                            <div className="flex-row flex-space">
+                              <select 
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const uri = e.target.value;
+                                  if (uri === 'custom') {
+                                    setIsAddingCustomProp(true);
+                                  } else if (uri) {
+                                    setNodeDetails(prev => ({ ...prev, [uri]: '' }));
+                                  }
+                                  e.target.value = '';
+                                }}
+                                style={{ flex: 1 }}
+                              >
+                                <option value="" disabled>➕ Agregar otra propiedad ontológica...</option>
+                                {availableProperties
+                                  .filter(p => !nodeDetails[p] && !getPredefinedProperties(selectedNode.type).some(sp => sp.uri === p))
+                                  .map(p => (
+                                    <option key={p} value={p}>{getCleanLabel(p)}</option>
+                                  ))}
+                                <option value="custom">✏️ Propiedad personalizada por URI...</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex-row" style={{ gap: '6px' }}>
+                              <input 
+                                type="text" 
+                                placeholder="ex:miPropiedad o URI completa" 
+                                value={newPropURI}
+                                onChange={(e) => setNewPropURI(e.target.value)}
+                                style={{ flex: 1 }}
+                              />
+                              <button 
+                                className="btn btn-primary"
+                                onClick={() => {
+                                  if (newPropURI.trim()) {
+                                    let resolvedURI = newPropURI.trim();
+                                    if (resolvedURI.startsWith('ex:')) {
+                                      resolvedURI = resolvedURI.replace('ex:', 'http://example.org/resource/');
+                                    } else if (!resolvedURI.startsWith('http://') && !resolvedURI.startsWith('https://')) {
+                                      resolvedURI = `http://example.org/resource/${resolvedURI}`;
+                                    }
+                                    setNodeDetails(prev => ({ ...prev, [resolvedURI]: '' }));
+                                    setNewPropURI('');
+                                    setIsAddingCustomProp(false);
+                                  }
+                                }}
+                              >
+                                Añadir
+                              </button>
+                              <button className="btn" onClick={() => setIsAddingCustomProp(false)}>Cancelar</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sección 3: Metadatos del Sistema */}
+                  <div className="collapsible-section">
+                    <div 
+                      className={`collapsible-header ${openSections.meta ? 'open' : ''}`}
+                      onClick={() => setOpenSections({ ...openSections, meta: !openSections.meta })}
+                    >
+                      <span>ℹ️ Metadatos del Sistema</span>
+                      <span className="caret">▶</span>
+                    </div>
+                    {openSections.meta && (
+                      <div className="collapsible-content">
+                        <div className="form-group">
+                          <label>URI del Recurso</label>
+                          <input type="text" value={selectedNode.uri} readOnly style={{ cursor: 'copy' }} onClick={() => navigator.clipboard.writeText(selectedNode.uri)} title="Clic para copiar URI" />
+                        </div>
+                        <div className="form-group">
+                          <label>Clase RDF de la Ontología (rdf:type)</label>
+                          <input type="text" value={selectedNode.type} readOnly />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Botones de acción del Modal */}
+                  <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                    <button className="btn" onClick={() => { setSelectedNode(null); setIsInspectorOpen(false); }}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={saveNodeProperties}>Guardar Cambios</button>
+                  </div>
+                </>
+              )}
+
+              {selectedConnection && (
+                <>
+                  <div className="form-group">
+                    <label>Sujeto (Origen)</label>
+                    <input type="text" value={getCleanLabel(selectedConnection.from)} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label>Predicado (Relación)</label>
+                    <input type="text" value={getCleanLabel(selectedConnection.predicate)} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label>Objeto (Destino)</label>
+                    <input type="text" value={getCleanLabel(selectedConnection.to)} readOnly />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
