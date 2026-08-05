@@ -9,7 +9,7 @@ Un lienzo interactivo y visual (**Spatial Canvas**) maquetado sobre un backend s
 El sistema cuenta con una arquitectura de 3 capas modulares:
 
 1.  **Frontend Visual (Vite + React + TS)**: Interfaz gráfica libre tipo mindmap/pizarra interactiva. Soporta arrastrar y soltar (drag & drop) nodos, zoom/paneo del lienzo y trazado dinámico de líneas conectoras SVG.
-2.  **UI Tagging (Modularidad CSS/JS)**: Cada componente visual posee identificadores unívocos (`#canvasMain`, `#nodeInvestigador`, `#nodeTesista`, `#nodeProyecto`, `#nodePaper`, `#nodeTopicCSO`, `#ventanaEspecial`, `#sidebarSemantic`) para modificaciones directas de maquetación y estilos. En modo desarrollo (`npm run dev`), los IDs de estos componentes se muestran flotantes sobre cada elemento.
+2.  **UI Tagging (Modularidad CSS/JS)**: Cada componente visual posee identificadores unívocos (`#canvasMain`, `#nodeInvestigador`, `#nodeTesista`, `#nodeProyecto`, `#nodePaper`, `#nodeTopicCSO`, `#inspectorSemantico`, `#sidebarSemantic`) para modificaciones directas de maquetación y estilos. En modo desarrollo (`npm run dev`), los IDs de estos componentes se muestran flotantes sobre cada elemento.
 3.  **Backend Semántico (Express Proxy + GraphDB)**: Servidor en Node.js que expone un proxy SPARQL transparente. Encarrila de forma automática las consultas (`SELECT`/`ASK`) y las mutaciones (`INSERT`/`DELETE`) hacia Ontotext GraphDB, manteniendo la consistencia e integridad referencial del grafo.
 
 ---

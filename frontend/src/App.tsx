@@ -96,8 +96,11 @@ SELECT ?s ?p ?o WHERE {
             if (!isCurrentVivo && isNewVivo) {
               nodeMap[uri].type = type; // Priorizar VIVO
             } else if (isCurrentVivo === isNewVivo) {
-              if (currentType.includes('Publication') || currentType.includes('Thing')) {
-                nodeMap[uri].type = type; // Más específico
+              const isCurrentGeneric = currentType.endsWith('#Student') || currentType.endsWith('#Publication') || currentType.endsWith('#Thing') || currentType.endsWith('#InformationResource');
+              const isNewGeneric = type.endsWith('#Student') || type.endsWith('#Publication') || type.endsWith('#Thing') || type.endsWith('#InformationResource');
+              
+              if (isCurrentGeneric && !isNewGeneric) {
+                nodeMap[uri].type = type; // Reemplazar genérico por específico
               }
             }
             return;
@@ -399,11 +402,11 @@ SELECT ?s ?p ?o WHERE {
     // Ontological Predicate Suggestion
     let suggestedPredicate = 'http://example.org/resource/relatedTo';
     
-    if (sourceNode.type.includes('FacultyMember') && targetNode.type.includes('GraduateStudent')) {
+    if (sourceNode.type.includes('FacultyMember') && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#advisor';
-    } else if (sourceNode.type.includes('GraduateStudent') && targetNode.type.includes('Project')) {
+    } else if ((sourceNode.type.includes('GraduateStudent') || sourceNode.type.includes('UndergraduateStudent')) && targetNode.type.includes('Project')) {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#contributorTo';
-    } else if (sourceNode.type.includes('Article') && targetNode.type.includes('GraduateStudent')) {
+    } else if (sourceNode.type.includes('Article') && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
       suggestedPredicate = 'https://dblp.org/rdf/schema#authoredBy';
     } else if (sourceNode.type.includes('Article') && targetNode.type.includes('Topic')) {
       suggestedPredicate = 'http://purl.org/dc/terms/subject';
@@ -455,7 +458,8 @@ SELECT ?s ?p ?o WHERE {
   // Helper selector helper mapping component styles
   const getNodeComponentId = (type: string) => {
     if (type.includes('FacultyMember')) return 'nodeInvestigador';
-    if (type.includes('Student') || type.includes('GraduateStudent')) return 'nodeTesista';
+    if (type.includes('GraduateStudent')) return 'nodeTesistaPosgrado';
+    if (type.includes('UndergraduateStudent')) return 'nodeTesistaDeGrado';
     if (type.includes('Project')) return 'nodeProyecto';
     if (type.includes('InformationResource') || type.includes('AcademicArticle') || type.includes('Article') || type.includes('Publication')) return 'nodePaper';
     if (type.includes('Topic')) return 'nodeTopicCSO';
@@ -614,10 +618,10 @@ SELECT ?s ?p ?o WHERE {
         </div>
       </div>
 
-      {/* Floating Property Inspector (#ventanaEspecial) */}
+      {/* Floating Property Inspector (#inspectorSemantico) */}
       {isInspectorOpen && (selectedNode || selectedConnection) && (
-        <div id="ventanaEspecial">
-          {isDev && <span className="dev-tag-badge">#ventanaEspecial</span>}
+        <div id="inspectorSemantico">
+          {isDev && <span className="dev-tag-badge">#inspectorSemantico</span>}
           <div className="window-header">
             <h3>Inspector Semántico</h3>
             <button className="btn" onClick={() => { setSelectedNode(null); setSelectedConnection(null); setIsInspectorOpen(false); }}>Cerrar</button>
@@ -699,6 +703,7 @@ SELECT ?s ?p ?o WHERE {
               <select value={newNodeData.type} onChange={(e) => setNewNodeData({ ...newNodeData, type: e.target.value })}>
                 <option value="http://vivoweb.org/ontology/core#FacultyMember">Investigador (vivo:FacultyMember)</option>
                 <option value="http://vivoweb.org/ontology/core#GraduateStudent">Tesista de Posgrado (vivo:GraduateStudent)</option>
+                <option value="http://vivoweb.org/ontology/core#UndergraduateStudent">Tesista de Grado (vivo:UndergraduateStudent)</option>
                 <option value="http://vivoweb.org/ontology/core#Project">Proyecto (vivo:Project)</option>
                 <option value="https://dblp.org/rdf/schema#Article">Paper (dblp:Article)</option>
                 <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
