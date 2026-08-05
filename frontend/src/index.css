@@ -426,6 +426,8 @@ body, html, #root {
   gap: 12px;
   border-top: 1px solid var(--border-color);
   animation: fadeIn 0.15s ease-out;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 /* Validation Style */
