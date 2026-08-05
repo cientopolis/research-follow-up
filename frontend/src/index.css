@@ -1,0 +1,473 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #4c4f69;
+  background-color: #eff1f5;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Color Palette (Catppuccin Latte Inspired Light Mode) */
+  --bg-base: #eff1f5;
+  --bg-mantle: #e6e9ef;
+  --bg-crust: #dce0e8;
+  --bg-surface: rgba(255, 255, 255, 0.7);
+  --bg-overlay: rgba(230, 233, 239, 0.85);
+  
+  --text-main: #4c4f69;
+  --text-sub: #5c5f77;
+  --text-muted: #8c8fa1;
+
+  /* Semantics */
+  --color-investigador: #1e66f5; /* Blue */
+  --color-tesista: #40a02b;      /* Green */
+  --color-proyecto: #d20f39;     /* Red/Pink */
+  --color-paper: #8839ef;        /* Purple */
+  --color-topic: #179287;        /* Teal */
+  
+  --accent: #df8e1d;             /* Yellow/Amber */
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-active: rgba(0, 0, 0, 0.2);
+  --border-focus: #1e66f5;
+}
+
+body, html, #root {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-base);
+}
+
+/* Canvas Main Container */
+#canvasMain {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background-color: var(--bg-crust);
+  background-image: 
+    radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    radial-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px, 10px 10px;
+  background-position: 0 0, 0 0;
+}
+
+#canvasMain:active {
+  cursor: grabbing;
+}
+
+/* Inner Canvas that transforms (pan/zoom) */
+.canvas-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0px 0px;
+}
+
+/* SVG Overlay for Connections */
+.canvas-connections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Nodes Styling */
+.node-card {
+  position: absolute;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  width: 220px;
+  min-height: 80px;
+  cursor: move;
+  z-index: 10;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-card:hover {
+  border-color: var(--border-active);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.node-card.selected {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 15px rgba(249, 226, 175, 0.3) !important;
+}
+
+.node-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.node-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  line-height: 1.25;
+}
+
+.node-card .node-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+/* Semantic Node Specializations */
+#nodeInvestigador {
+  border-left: 4px solid var(--color-investigador);
+}
+#nodeInvestigador .node-tag {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--color-investigador);
+}
+
+#nodeTesista {
+  border-left: 4px solid var(--color-tesista);
+}
+#nodeTesista .node-tag {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--color-tesista);
+}
+
+#nodeProyecto {
+  border-left: 4px solid var(--color-proyecto);
+}
+#nodeProyecto .node-tag {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--color-proyecto);
+}
+
+#nodePaper {
+  border-left: 4px solid var(--color-paper);
+}
+#nodePaper .node-tag {
+  background: rgba(203, 166, 247, 0.15);
+  color: var(--color-paper);
+}
+
+#nodeTopicCSO {
+  border-left: 4px solid var(--color-topic);
+}
+#nodeTopicCSO .node-tag {
+  background: rgba(148, 226, 213, 0.15);
+  color: var(--color-topic);
+}
+
+/* Connectors */
+.edge-connector-path {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2.5;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.edge-connector-path:hover {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+.edge-connector-path.selected {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+/* Edge Labels (Predicates) */
+.edge-label {
+  font-size: 0.75rem;
+  fill: var(--text-sub);
+  background: var(--bg-mantle);
+  padding: 2px 6px;
+  pointer-events: auto;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* Floating Tools / Header */
+.canvas-header {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 12px;
+}
+
+.canvas-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.btn {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-active);
+}
+
+.btn-primary {
+  background: var(--color-investigador);
+  color: var(--bg-base);
+  border: none;
+}
+
+.btn-primary:hover {
+  background: #b4befe;
+}
+
+/* Sidebar Semantic */
+#sidebarSemantic {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--bg-mantle);
+  border-left: 1px solid var(--border-color);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#sidebarSemantic.collapsed {
+  transform: translateX(100%);
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* SPARQL Console */
+.sparql-console {
+  background: var(--bg-crust);
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  font-family: monospace;
+}
+
+.sparql-input {
+  width: 100%;
+  height: 150px;
+  background: transparent;
+  border: none;
+  color: #a6e3a1;
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+  outline: none;
+}
+
+/* Inspector Overlay (#ventanaEspecial) */
+#ventanaEspecial {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 350px;
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  z-index: 110;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.window-header {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.window-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.form-group input, .form-group select {
+  background: var(--bg-crust);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 0.85rem;
+}
+
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--accent);
+}
+
+/* Helpers */
+.flex-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.flex-space {
+  justify-content: space-between;
+}
+
+/* Development mode UI tag badge */
+.dev-tag-badge {
+  position: absolute;
+  top: -6px;
+  right: 12px;
+  font-size: 0.65rem;
+  font-family: monospace;
+  font-weight: bold;
+  color: var(--text-muted);
+  background: var(--bg-crust);
+  border: 1px dashed var(--border-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 999;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+#canvasMain > .dev-tag-badge {
+  top: 25px;
+  left: 310px;
+  right: auto;
+  position: absolute;
+}
+#sidebarSemantic > .dev-tag-badge {
+  top: 20px;
+  left: 20px;
+  right: auto;
+}
+#ventanaEspecial > .dev-tag-badge {
+  top: 15px;
+  left: 20px;
+  right: auto;
+}
+
+/* Gear button on nodes to open inspector */
+.node-inspect-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
+}
+
+.node-inspect-btn:hover {
+  color: var(--accent);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Delete button on nodes */
+.node-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
+}
+
+.node-delete-btn:hover {
+  color: var(--color-proyecto); /* Red color for delete action */
+  background-color: rgba(243, 139, 168, 0.1);
+}

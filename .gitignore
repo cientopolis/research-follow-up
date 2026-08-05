@@ -1,0 +1,23 @@
+# Local configuration and credentials
+.env.local
+config.local.json
+.env
+
+# Local GraphDB data and logs (if run inside project)
+/data/
+/logs/
+/db-data/
+
+# OS and temp files
+.DS_Store
+Thumbs.db
+*.log
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
