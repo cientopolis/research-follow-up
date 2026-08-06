@@ -120,31 +120,86 @@ SELECT ?s ?p ?o WHERE {
 
   // UX Options
   const [selectedSound, setSelectedSound] = useState<'chime' | 'bell' | 'digital'>('chime');
-  const [soundVolume, setSoundVolume] = useState(0.5);
+  const [selectedTickSound, setSelectedTickSound] = useState<'classic' | 'wood' | 'noise'>('classic');
+  const [soundVolume, setSoundVolume] = useState(0.8); // Default to a louder volume (0.8 instead of 0.5)
   const [autoStartBreak, setAutoStartBreak] = useState(true);
   const [autoStartWork, setAutoStartWork] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [enableTickTock, setEnableTickTock] = useState(true);
 
+  // Persistent Audio Context Ref (solves the sound disconnection issue by reusing a single context)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  };
+
   const playTickTock = (isEven: boolean) => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
+      const audioCtx = getAudioContext();
+      const now = audioCtx.currentTime;
       const gain = audioCtx.createGain();
-      
-      osc.connect(gain);
       gain.connect(audioCtx.destination);
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(isEven ? 1600 : 1200, audioCtx.currentTime);
-      
-      const tickVolume = 0.015 * soundVolume; // Very quiet focus tick
-      gain.gain.setValueAtTime(tickVolume, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.03);
-      
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.04);
-    } catch (e) {}
+
+      if (selectedTickSound === 'classic') {
+        const osc = audioCtx.createOscillator();
+        osc.connect(gain);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isEven ? 1600 : 1200, now);
+        
+        const tickVolume = 0.08 * soundVolume; // Louder (up from 0.015)
+        gain.gain.setValueAtTime(tickVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+        
+        osc.start(now);
+        osc.stop(now + 0.04);
+      } else if (selectedTickSound === 'wood') {
+        const osc = audioCtx.createOscillator();
+        osc.connect(gain);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(isEven ? 800 : 600, now);
+        
+        const tickVolume = 0.15 * soundVolume; // Woodblock click
+        gain.gain.setValueAtTime(tickVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.015);
+        
+        osc.start(now);
+        osc.stop(now + 0.02);
+      } else if (selectedTickSound === 'noise') {
+        // High-pass filtered white noise burst (modern clock brush sweep)
+        const bufferSize = audioCtx.sampleRate * 0.02; // 20ms
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(isEven ? 3500 : 2500, now);
+
+        noiseNode.connect(filter);
+        filter.connect(gain);
+
+        const tickVolume = 0.12 * soundVolume;
+        gain.gain.setValueAtTime(tickVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+
+        noiseNode.start(now);
+        noiseNode.stop(now + 0.025);
+      }
+    } catch (e) {
+      console.error("Tick-tock sound failed", e);
+    }
   };
 
   const requestNotificationPermission = async () => {
@@ -162,7 +217,7 @@ SELECT ?s ?p ?o WHERE {
 
   const playAlertSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = getAudioContext();
       const playTone = (freq: number, type: OscillatorType, start: number, duration: number, volStart: number) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -180,15 +235,15 @@ SELECT ?s ?p ?o WHERE {
 
       const now = audioCtx.currentTime;
       if (selectedSound === 'chime') {
-        playTone(880, 'sine', now, 0.4, 0.2);
-        playTone(1200, 'sine', now + 0.15, 0.6, 0.2);
+        playTone(880, 'sine', now, 0.5, 0.4); // Louder
+        playTone(1200, 'sine', now + 0.15, 0.7, 0.4);
       } else if (selectedSound === 'bell') {
         const freqs = [440, 554, 659, 880, 1200];
-        freqs.forEach((f) => playTone(f, 'triangle', now, 1.2, 0.1));
+        freqs.forEach((f) => playTone(f, 'triangle', now, 1.4, 0.2)); // Louder
       } else if (selectedSound === 'digital') {
-        playTone(2000, 'square', now, 0.1, 0.15);
-        playTone(2000, 'square', now + 0.15, 0.1, 0.15);
-        playTone(2000, 'square', now + 0.3, 0.1, 0.15);
+        playTone(2000, 'square', now, 0.12, 0.3); // Louder
+        playTone(2000, 'square', now + 0.15, 0.12, 0.3);
+        playTone(2000, 'square', now + 0.3, 0.12, 0.3);
       }
     } catch (e) {
       console.error("Audio Context failed", e);
@@ -1525,13 +1580,13 @@ SELECT ?s ?p ?o WHERE {
                     const vol = parseFloat(e.target.value);
                     setSoundVolume(vol);
                     try {
-                      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                      const ctx = getAudioContext();
                       const osc = ctx.createOscillator();
                       const gain = ctx.createGain();
                       osc.connect(gain);
                       gain.connect(ctx.destination);
                       osc.frequency.setValueAtTime(600, ctx.currentTime);
-                      gain.gain.setValueAtTime(0.05 * vol, ctx.currentTime);
+                      gain.gain.setValueAtTime(0.08 * vol, ctx.currentTime);
                       osc.start();
                       osc.stop(ctx.currentTime + 0.08);
                     } catch(e) {}
@@ -1550,6 +1605,21 @@ SELECT ?s ?p ?o WHERE {
                   style={{ accentColor: 'var(--accent)' }}
                 />
               </div>
+
+              {enableTickTock && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingLeft: '10px' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tipo de Tic-Tac:</span>
+                  <select 
+                    value={selectedTickSound} 
+                    onChange={(e) => setSelectedTickSound(e.target.value as any)}
+                    style={{ padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.7rem' }}
+                  >
+                    <option value="classic">Clásico (Seno)</option>
+                    <option value="wood">Madera (Woodblock)</option>
+                    <option value="noise">Moderno (Cepillo)</option>
+                  </select>
+                </div>
+              )}
 
               {/* Auto-start toggles */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
