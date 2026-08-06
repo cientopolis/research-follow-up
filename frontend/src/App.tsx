@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PomodoroTimer } from './components/PomodoroTimer';
-
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import type { User } from 'firebase/auth';
+import { auth } from './firebase';
+import { AuthScreen } from './components/AuthScreen';
 
 interface RDFNode {
   uri: string;
@@ -56,6 +59,38 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
 
 export default function App() {
   const isDev = import.meta.env.DEV;
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [associatedResearcher, setAssociatedResearcher] = useState<string | null>(null);
+  const [configNewNode, setConfigNewNode] = useState({ label: '', uriSuffix: '' });
+  const [configSelectUri, setConfigSelectUri] = useState('');
+
+  // Monitor auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const fetchWithAuth = useCallback(async (url: RequestInfo | URL, options: RequestInit = {}) => {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = {
+      ...options.headers,
+      'Content-Type': 'application/json',
+    } as Record<string, string>;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }, []);
+
   const [nodes, setNodes] = useState<RDFNode[]>([]);
   const [connections, setConnections] = useState<RDFConnection[]>([]);
   const [selectedNode, setSelectedNode] = useState<RDFNode | null>(null);
@@ -118,13 +153,17 @@ SELECT ?s ?p ?o WHERE {
 
   // Load data from GraphDB
   const fetchGraphData = async () => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX ex: <http://example.org/resource/>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
 
       SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType WHERE {
         ?node rdf:type ?type .
+        ?node rfu:createdBy <${userUri}> .
         ?node rdfs:label ?label .
         OPTIONAL { ?node ex:posX ?x }
         OPTIONAL { ?node ex:posY ?y }
@@ -135,7 +174,7 @@ SELECT ?s ?p ?o WHERE {
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -184,23 +223,154 @@ SELECT ?s ?p ?o WHERE {
         
         // Fetch connections
         await fetchConnections();
+
+        // Fetch associated researcher
+        await fetchAssociatedResearcher();
       }
     } catch (e) {
       console.error("Error al cargar nodos de GraphDB", e);
     }
   };
 
-  const fetchConnections = async () => {
+  const fetchAssociatedResearcher = async () => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const query = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      SELECT ?researcher WHERE {
+        <${userUri}> rfu:associatedResearcher ?researcher .
+      }
+    `;
+    try {
+      const response = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const data = await response.json();
+      if (data.results && data.results.bindings && data.results.bindings.length > 0) {
+        setAssociatedResearcher(data.results.bindings[0].researcher.value);
+      } else {
+        setAssociatedResearcher(null);
+      }
+    } catch (e) {
+      console.error("Error al obtener investigador asociado:", e);
+    }
+  };
+
+  const linkResearcher = async (researcherUri: string) => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    
+    // First, delete any previous association
+    const deleteQuery = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      DELETE WHERE {
+        <${userUri}> rfu:associatedResearcher ?r .
+      }
+    `;
+    const insertQuery = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      INSERT DATA {
+        <${userUri}> rfu:associatedResearcher <${researcherUri}> .
+      }
+    `;
+    try {
+      await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: deleteQuery })
+      });
+      await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: insertQuery })
+      });
+      setAssociatedResearcher(researcherUri);
+    } catch (e) {
+      console.error("Error al vincular investigador:", e);
+    }
+  };
+
+  const unlinkResearcher = async () => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    const query = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      DELETE WHERE {
+        <${userUri}> rfu:associatedResearcher ?r .
+      }
+    `;
+    try {
+      await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      setAssociatedResearcher(null);
+    } catch (e) {
+      console.error("Error al desvincular investigador:", e);
+    }
+  };
+
+  const createAndLinkResearcher = async (label: string, uriSuffix: string) => {
+    if (!user || !label.trim() || !uriSuffix.trim()) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    const cleanSuffix = uriSuffix.trim().replace(/\s+/g, '');
+    const nodeUri = `http://example.org/resource/${cleanSuffix}`;
+    
+    if (nodes.some(n => n.uri === nodeUri)) {
+      alert("La URI del nodo ya existe. Por favor, elige otro sufijo.");
+      return;
+    }
+
+    const query = `
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX ex: <http://example.org/resource/>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+
+      INSERT DATA {
+        <${nodeUri}> rdf:type <http://vivoweb.org/ontology/core#FacultyMember> ;
+                     rdfs:label "${label.trim()}" ;
+                     rfu:createdBy <${userUri}> ;
+                     ex:posX "150" ;
+                     ex:posY "150" .
+        <${userUri}> rfu:associatedResearcher <${nodeUri}> .
+      }
+    `;
+
+    try {
+      const response = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const data = await response.json();
+      if (data.success) {
+        await fetchGraphData();
+      }
+    } catch (e) {
+      console.error("Error al crear y vincular investigador:", e);
+    }
+  };
+
+  const fetchConnections = async () => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    const query = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
       SELECT ?from ?predicate ?to WHERE {
         ?from ?predicate ?to .
+        ?from rfu:createdBy <${userUri}> .
+        ?to rfu:createdBy <${userUri}> .
         FILTER(STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
         FILTER(?predicate != <http://example.org/resource/posX> && ?predicate != <http://example.org/resource/posY> && ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && ?predicate != <http://www.w3.org/2000/01/rdf-schema#label> && ?predicate != <http://example.org/resource/status>)
       }
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -269,7 +439,7 @@ SELECT ?s ?p ?o WHERE {
       }
     `;
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -302,7 +472,7 @@ SELECT ?s ?p ?o WHERE {
       }
     `;
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -327,11 +497,13 @@ SELECT ?s ?p ?o WHERE {
     }
   }, [selectedNode, isInspectorOpen]);
 
-  // Load all datatypes on mount
+  // Load all datatypes when user is resolved
   useEffect(() => {
-    fetchGraphData();
-    fetchAllDatatypeProperties();
-  }, []);
+    if (user) {
+      fetchGraphData();
+      fetchAllDatatypeProperties();
+    }
+  }, [user]);
 
   const handlePropertyChange = (predicateURI: string, value: string, validationFn?: (val: string) => string | null) => {
     setNodeDetails(prev => ({ ...prev, [predicateURI]: value }));
@@ -404,7 +576,7 @@ SELECT ?s ?p ?o WHERE {
     `;
 
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: updateQuery })
@@ -425,8 +597,9 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
-  // Seed Data Loader
-  const loadSeedData = async () => {
+   const loadSeedData = async () => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const seedQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -435,33 +608,39 @@ SELECT ?s ?p ?o WHERE {
       PREFIX dct: <http://purl.org/dc/terms/>
       PREFIX cso: <http://cso.kmi.open.ac.uk/schema/cso#>
       PREFIX ex: <http://example.org/resource/>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
 
       INSERT DATA {
         ex:TuUsuario a vivo:FacultyMember ;
                      rdfs:label "Dr. Torres" ;
                      ex:posX 400 ;
-                     ex:posY 300 .
-                     
+                     ex:posY 300 ;
+                     rfu:createdBy <${userUri}> .
+                      
         ex:AnaGomez a vivo:GraduateStudent ;
                     rdfs:label "Lic. Ana Gómez" ;
                     ex:posX 650 ;
-                    ex:posY 150 .
-                    
+                    ex:posY 150 ;
+                    rfu:createdBy <${userUri}> .
+                     
         ex:ProyectoPICTGrafos a vivo:Project ;
                               rdfs:label "PICT-Grafos" ;
                               ex:posX 150 ;
-                              ex:posY 300 .
+                              ex:posY 300 ;
+                              rfu:createdBy <${userUri}> .
 
         ex:PaperGNN a dblp:Article ;
                     rdfs:label "GNN for Link Prediction" ;
                     ex:status "In Review" ;
                     ex:posX 900 ;
-                    ex:posY 100 .
+                    ex:posY 100 ;
+                    rfu:createdBy <${userUri}> .
 
         ex:TopicGNN a cso:Topic ;
                     rdfs:label "Graph Neural Networks" ;
                     ex:posX 900 ;
-                    ex:posY -50 .
+                    ex:posY -50 ;
+                    rfu:createdBy <${userUri}> .
 
         ex:TuUsuario vivo:advisor ex:AnaGomez .
         ex:AnaGomez vivo:contributorTo ex:ProyectoPICTGrafos .
@@ -471,7 +650,7 @@ SELECT ?s ?p ?o WHERE {
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: seedQuery })
@@ -488,7 +667,7 @@ SELECT ?s ?p ?o WHERE {
   // Run custom SPARQL Query
   const runCustomSPARQL = async () => {
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: sparqlQuery })
@@ -546,7 +725,7 @@ SELECT ?s ?p ?o WHERE {
           }
         `;
         try {
-          await fetch('/api/sparql', {
+          await fetchWithAuth('/api/sparql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: updateQuery })
@@ -593,6 +772,8 @@ SELECT ?s ?p ?o WHERE {
   // Create Node
   const createNode = async () => {
     if (!newNodeData.label || !newNodeData.uriSuffix) return;
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     
     const uri = `http://example.org/resource/${newNodeData.uriSuffix.trim()}`;
     const x = Math.round((-pan.x + window.innerWidth / 2) / zoom);
@@ -612,18 +793,20 @@ SELECT ?s ?p ?o WHERE {
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX ex: <http://example.org/resource/>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
       
       INSERT DATA {
         <${uri}> rdf:type <${finalType}> ;
                  rdfs:label "${newNodeData.label}" ;
                  ex:posX ${x} ;
-                 ex:posY ${y} .
+                 ex:posY ${y} ;
+                 rfu:createdBy <${userUri}> .
         ${extraTriples}
       }
     `;
 
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: insertQuery })
@@ -649,7 +832,7 @@ SELECT ?s ?p ?o WHERE {
     `;
 
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -693,7 +876,7 @@ SELECT ?s ?p ?o WHERE {
     `;
 
     try {
-      const res = await fetch('/api/sparql', {
+      const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: insertQuery })
@@ -750,26 +933,212 @@ SELECT ?s ?p ?o WHERE {
     return 'nodeCard';
   };
 
-  return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      
-      {/* Floating Header */}
-      <div className="canvas-header">
-        <h1>Spatial Semantic Canvas</h1>
-        <button className="btn btn-primary" onClick={() => setShowNewNodeModal(true)}>+ Agregar Nodo</button>
-        <button 
-          className={`btn ${isConnectingMode ? 'btn-primary' : ''}`}
-          onClick={() => {
-            setIsConnectingMode(!isConnectingMode);
-            setConnectSourceNode(null);
-          }}
-        >
-          {isConnectingMode ? 'Conectando...' : 'Conectar Nodos'}
-        </button>
-        {nodes.length === 0 && (
-          <button className="btn" onClick={loadSeedData}>Cargar Semilla Inicial</button>
-        )}
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#eff1f5', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ fontSize: '2.5rem', animation: 'spin 2s linear infinite' }}>🍅</div>
+          <div style={{ fontSize: '1rem', color: '#4c4f69', fontWeight: 500 }}>Iniciando aplicación semántica...</div>
+        </div>
       </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      
+      {/* Top Header/Navbar */}
+      <div className="top-navbar" style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        background: 'var(--bg-surface)', 
+        borderBottom: '1px solid var(--border-color)', 
+        padding: '12px 24px',
+        zIndex: 100,
+        height: '64px',
+        boxSizing: 'border-box',
+        position: 'relative',
+        flexShrink: 0
+      }}>
+        {/* Left Side: Title and Node Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Spatial Semantic Canvas</h1>
+          
+          <div style={{ position: 'relative' }}>
+            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
+            <button className="btn btn-primary" onClick={() => setShowNewNodeModal(true)}>+ Agregar Nodo</button>
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnConectarNodos</span>}
+            <button 
+              className={`btn ${isConnectingMode ? 'btn-primary' : ''}`}
+              onClick={() => {
+                setIsConnectingMode(!isConnectingMode);
+                setConnectSourceNode(null);
+              }}
+            >
+              {isConnectingMode ? 'Conectando...' : 'Conectar Nodos'}
+            </button>
+          </div>
+          
+          {nodes.length === 0 && (
+            <button className="btn" onClick={loadSeedData}>Cargar Semilla Inicial</button>
+          )}
+        </div>
+
+        {/* Right Side: SPARQL Console, Pomodoro, and User Profile Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Floating Toggle Buttons (Open Panels) */}
+          {activeRightPanel === 'none' && (
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ position: 'relative' }}>
+                {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnConsolaSparql</span>}
+                <button className="btn" onClick={() => setActiveRightPanel('sparql')}>
+                  Consola SPARQL
+                </button>
+              </div>
+              
+              <div style={{ position: 'relative' }}>
+                {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnPomodoro</span>}
+                <button className="btn btn-primary" onClick={() => setActiveRightPanel('pomodoro')}>
+                  ⏱️ Pomodoro
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* User Profile Dropdown */}
+          <div style={{ position: 'relative' }}>
+            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#userDropdownMenu</span>}
+            <div 
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-color)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                userSelect: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                transition: 'background-color 0.2s',
+              }}
+            >
+              <span style={{ fontSize: '1rem' }}>👤</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-main)' }}>{user.email}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isUserMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▼</span>
+            </div>
+
+            {/* Dropdown Menu */}
+            {isUserMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: '48px',
+                right: 0,
+                background: 'var(--bg-surface)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
+                padding: '8px 0',
+                width: '220px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+              }}>
+                <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>SESIÓN ACTIVA</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-all' }}>{user.email}</div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setShowConfigModal(true);
+                    setIsUserMenuOpen(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-main)',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  ⚙️ Configuración General
+                </button>
+
+                <button 
+                  onClick={() => {
+                    const configHeader = document.querySelector('label[style*="cursor: pointer"]');
+                    if (configHeader) {
+                      (configHeader as HTMLElement).click();
+                    }
+                    alert('Puedes ajustar el Pomodoro usando el panel colapsable "CONFIGURACIÓN" en la barra lateral.');
+                    setIsUserMenuOpen(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-main)',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  🍅 Configuración Pomodoro
+                </button>
+
+                <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }} />
+
+                <button 
+                  onClick={() => signOut(auth)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#d20f39',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  🚪 Cerrar Sesión
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area (Canvas & Sidebars) */}
+      <div style={{ display: 'flex', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
       {/* Main Interactive Canvas */}
       <div 
@@ -881,6 +1250,7 @@ SELECT ?s ?p ?o WHERE {
           {nodes.map((node) => {
             const isSelected = selectedNode?.uri === node.uri;
             const isConnectSrc = connectSourceNode === node.uri;
+            const isSelf = node.uri === associatedResearcher;
             const nodeDomId = getNodeComponentId(node.type, node.thesisType);
 
             return (
@@ -891,13 +1261,35 @@ SELECT ?s ?p ?o WHERE {
                 className={`node-card ${isSelected ? 'selected' : ''}`}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px)`,
-                  border: isConnectSrc ? '2.5px solid var(--accent)' : undefined
+                  border: isConnectSrc 
+                    ? '2.5px solid var(--accent)' 
+                    : isSelf 
+                      ? '2.5px solid var(--color-investigador)' 
+                      : undefined,
+                  boxShadow: isSelf 
+                    ? '0 0 15px rgba(180, 190, 254, 0.5)' 
+                    : undefined
                 }}
                 onMouseDown={(e) => startDragNode(e, node)}
               >
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div className="flex-row flex-space">
-                  <span className="node-tag">{getCleanType(node.type, node.thesisType)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="node-tag">{getCleanType(node.type, node.thesisType)}</span>
+                    {isSelf && (
+                      <span style={{ 
+                        fontSize: '0.65rem', 
+                        fontWeight: 'bold', 
+                        background: 'var(--color-investigador)', 
+                        color: 'var(--bg-base)', 
+                        padding: '2px 6px', 
+                        borderRadius: '4px',
+                        display: 'inline-block'
+                      }}>
+                        Este sos vos
+                      </span>
+                    )}
+                  </div>
                   <div className="flex-row" style={{ gap: '6px' }}>
                     {node.status && <span style={{ fontSize: '0.7rem', color: 'var(--color-proyecto)' }}>{node.status}</span>}
                     <button 
@@ -1188,6 +1580,132 @@ SELECT ?s ?p ?o WHERE {
         </div>
       )}
 
+      {/* Modal Configuración General */}
+      {showConfigModal && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', justifyContent: 'center',
+          alignItems: 'center', zIndex: 500, backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{ 
+            background: 'var(--bg-mantle)', 
+            padding: '32px', 
+            borderRadius: '20px', 
+            width: '450px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '24px',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.2)'
+          }}>
+            <div className="flex-row flex-space" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>⚙️ Configuración General</h2>
+              <button className="btn" onClick={() => setShowConfigModal(false)}>Cerrar</button>
+            </div>
+
+            {associatedResearcher ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ background: 'rgba(76, 79, 105, 0.05)', padding: '16px', borderRadius: '12px', border: '1px solid var(--color-investigador)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-investigador)', fontWeight: 600, marginBottom: '6px' }}>ESTADO DE VINCULACIÓN</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    ✅ Vinculado a: <strong>{nodes.find(n => n.uri === associatedResearcher)?.label || getCleanLabel(associatedResearcher)}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', wordBreak: 'break-all' }}>
+                    URI: {associatedResearcher}
+                  </div>
+                </div>
+                <button 
+                  className="btn" 
+                  style={{ color: '#d20f39', borderColor: '#d20f39', alignSelf: 'flex-start' }}
+                  onClick={unlinkResearcher}
+                >
+                  Desvincular Cuenta
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Asocia tu cuenta de usuario con un nodo investigador para destacar tu perfil en el lienzo del sistema.
+                </p>
+
+                {/* Opción A: Vincular existente */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Opción A: Vincular a un Investigador Existente
+                  </label>
+                  <div className="flex-row" style={{ gap: '8px' }}>
+                    <select 
+                      value={configSelectUri}
+                      onChange={(e) => setConfigSelectUri(e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">-- Seleccionar investigador --</option>
+                      {nodes
+                        .filter(n => n.type.includes('FacultyMember'))
+                        .map(n => (
+                          <option key={n.uri} value={n.uri}>{n.label}</option>
+                        ))
+                      }
+                    </select>
+                    <button 
+                      className="btn btn-primary" 
+                      disabled={!configSelectUri}
+                      onClick={() => {
+                        linkResearcher(configSelectUri);
+                        setConfigSelectUri('');
+                      }}
+                    >
+                      Vincular
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>O</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
+                </div>
+
+                {/* Opción B: Crear y vincular nuevo */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Opción B: Crear Nuevo Investigador y Vincular
+                  </label>
+                  <div className="form-group">
+                    <label>Nombre / Etiqueta</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ej: Dr. Gomez" 
+                      value={configNewNode.label} 
+                      onChange={(e) => setConfigNewNode({ ...configNewNode, label: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Sufijo de URI</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ej: DrGomez" 
+                      value={configNewNode.uriSuffix} 
+                      onChange={(e) => setConfigNewNode({ ...configNewNode, uriSuffix: e.target.value.replace(/\s+/g, '') })} 
+                    />
+                  </div>
+                  <button 
+                    className="btn btn-primary"
+                    disabled={!configNewNode.label.trim() || !configNewNode.uriSuffix.trim()}
+                    onClick={() => {
+                      createAndLinkResearcher(configNewNode.label, configNewNode.uriSuffix);
+                      setConfigNewNode({ label: '', uriSuffix: '' });
+                    }}
+                  >
+                    Crear y Vincular
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Modal Confirmación de Eliminación */}
       {nodeToDelete && (
         <div style={{
@@ -1244,17 +1762,8 @@ SELECT ?s ?p ?o WHERE {
         <PomodoroTimer onClose={() => setActiveRightPanel('none')} nodes={nodes} />
       </div>
 
-      {/* Floating Toggle Buttons (Open Panels) */}
-      {activeRightPanel === 'none' && (
-        <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 100, display: 'flex', gap: '10px' }}>
-          <button className="btn" onClick={() => setActiveRightPanel('sparql')}>
-            Consola SPARQL
-          </button>
-          <button className="btn btn-primary" onClick={() => setActiveRightPanel('pomodoro')}>
-            ⏱️ Pomodoro
-          </button>
-        </div>
-      )}
+
+      </div>
     </div>
   );
 }

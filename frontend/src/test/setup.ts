@@ -1,6 +1,38 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// Mock Firebase SDK
+vi.mock('firebase/app', () => ({
+  initializeApp: vi.fn(() => ({})),
+}));
+
+vi.mock('firebase/auth', () => {
+  const mockUser = {
+    uid: 'test-user-uid',
+    email: 'test@example.com',
+    getIdToken: vi.fn().mockResolvedValue('test-token-jwt'),
+  };
+  const mockAuth = {
+    currentUser: mockUser,
+    onAuthStateChanged: vi.fn((callback) => {
+      callback(mockUser);
+      return () => {};
+    }),
+  };
+  return {
+    getAuth: vi.fn(() => mockAuth),
+    connectAuthEmulator: vi.fn(),
+    signInWithEmailAndPassword: vi.fn().mockResolvedValue({ user: mockUser }),
+    createUserWithEmailAndPassword: vi.fn().mockResolvedValue({ user: mockUser }),
+    sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue(undefined),
+    onAuthStateChanged: vi.fn((authInstance, callback) => {
+      callback(mockUser);
+      return () => {};
+    }),
+  };
+});
+
 // Mock BroadcastChannel
 class MockBroadcastChannel {
   name: string;

@@ -3,10 +3,19 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import admin from 'firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
 
 // Cargar variables de entorno locales (.env.local tiene prioridad)
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
+
+// Initialize Firebase Admin using Project ID (from env)
+// It automatically detects FIREBASE_AUTH_EMULATOR_HOST if present in env
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'placeholder-project-id';
+admin.initializeApp({
+  projectId: firebaseProjectId
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +29,24 @@ const GRAPHDB_URL = process.env.GRAPHDB_URL || 'http://localhost:7200';
 const REPO = process.env.GRAPHDB_REPOSITORY || 'researcherDB';
 const USER = process.env.GRAPHDB_USER;
 const PASSWORD = process.env.GRAPHDB_PASSWORD;
+
+// Auth Middleware
+const checkAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Acceso no autorizado: Token no provisto.' });
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('[Auth Middleware] Error de verificación de token:', error);
+    return res.status(403).json({ error: 'Token inválido o expirado.', details: error.message });
+  }
+};
 
 // Configurar cabeceras de autenticación para GraphDB
 const getGraphDBHeaders = (contentType = 'application/json') => {
@@ -39,14 +66,14 @@ const getGraphDBHeaders = (contentType = 'application/json') => {
   return headers;
 };
 
-// Endpoint unificado Proxy SPARQL
-app.post('/api/sparql', async (req, res) => {
+// Endpoint unificado Proxy SPARQL (Protegido por checkAuth)
+app.post('/api/sparql', checkAuth, async (req, res) => {
   const { query } = req.body;
   if (!query) {
     return res.status(400).json({ error: 'Falta el parámetro "query" en el cuerpo de la solicitud.' });
   }
 
-  const isUpdate = /insert|delete|clear|load|drop|create/i.test(query);
+  const isUpdate = /\b(insert|delete|clear|load|drop|create|with)\b/i.test(query);
   let endpoint = '';
   let body = '';
   let headers = {};

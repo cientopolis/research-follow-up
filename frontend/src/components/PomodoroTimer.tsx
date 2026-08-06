@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { auth } from '../firebase';
 
 export interface PomodoroTimerNode {
   uri: string;
@@ -24,6 +25,21 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   showCloseButton = true,
   nodes = [],
 }) => {
+  const fetchWithAuth = useCallback(async (url: RequestInfo | URL, options: RequestInit = {}) => {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = {
+      ...options.headers,
+      'Content-Type': 'application/json',
+    } as Record<string, string>;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }, []);
+
   const [pomodoroMode, setPomodoroMode] = useState<'work' | 'shortBreak' | 'longBreak'>('work');
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -262,6 +278,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
   // Fetch tasks from GraphDB
   const fetchTasks = async () => {
+    if (!auth.currentUser) return;
+    const userUri = `http://cientopolis.org/rfu/user/${auth.currentUser.uid}`;
     setIsLoadingTasks(true);
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -271,6 +289,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
       SELECT ?task ?title ?description ?status ?involvedNode ?pomodoro ?pStart ?pEnd WHERE {
         ?task rdf:type tmo:Task .
+        ?task rfu:createdBy <${userUri}> .
         OPTIONAL { ?task dcterms:title ?title }
         OPTIONAL { ?task dcterms:description ?description }
         OPTIONAL { ?task rfu:taskStatus ?status }
@@ -283,7 +302,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       }
     `;
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -342,6 +361,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
   };
 
   const createTaskInGraphDB = async (title: string, description: string, nodeUris: string[]) => {
+    if (!auth.currentUser) return;
+    const userUri = `http://cientopolis.org/rfu/user/${auth.currentUser.uid}`;
     const taskId = Date.now();
     const taskUri = `http://cientopolis.org/rfu/task/${taskId}`;
     
@@ -362,12 +383,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
           dcterms:title "${title.replace(/"/g, '\\"')}" ;
           dcterms:description "${description.replace(/"/g, '\\"')}" ;
           rfu:taskStatus "pending" ;
+          rfu:createdBy <${userUri}> ;
       ${nodesTriples}    rdf:type tmo:Task .
       }
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -411,7 +433,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -464,7 +486,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     `;
 
     try {
-      const response = await fetch('/api/sparql', {
+      const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
