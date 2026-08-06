@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :root {
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -86,7 +90,7 @@ body, html, #root {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 15; /* Dibujar encima de las tarjetas (z-index: 10) para evitar que tapen la flecha */
+  z-index: 1; /* Dibujar debajo de las tarjetas para un aspecto limpio */
   overflow: visible !important;
 }
 
@@ -101,7 +105,8 @@ body, html, #root {
   border: 1px solid var(--border-color);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
   width: 220px;
-  min-height: 80px;
+  height: 80px;
+  overflow: hidden;
   cursor: move;
   z-index: 10;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;

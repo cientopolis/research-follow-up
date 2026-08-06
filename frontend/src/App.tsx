@@ -778,15 +778,10 @@ SELECT ?s ?p ?o WHERE {
               const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2);
               const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1);
 
-              const dx = cx2 - cx1;
-              const dy = cy2 - cy1;
-              const len = Math.sqrt(dx * dx + dy * dy) || 1;
-
               const x1 = startPt.x;
               const y1 = startPt.y;
-              // Retraer el punto final 6px para que la punta de la flecha no toque de forma tan rígida el borde y sea plenamente visible
-              const x2 = endPt.x - (dx / len) * 6;
-              const y2 = endPt.y - (dy / len) * 6;
+              const x2 = endPt.x;
+              const y2 = endPt.y;
 
               const mx = (x1 + x2) / 2;
               const my = (y1 + y2) / 2;
