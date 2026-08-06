@@ -132,3 +132,7 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Alertas y Notificaciones**: Generación de alarmas sonoras e integración de notificaciones nativas de escritorio (Push) del sistema operativo al concluir los ciclos.
     *   **Flujo Inteligente**: Opciones de inicio automático de descansos o trabajo consecutivo y almacenamiento persistente del contexto de audio para prevenir desconexiones y asegurar un funcionamiento continuo de alta fidelidad.
 
+---
+
+## 🔍 Consultas SPARQL
+Para conocer en detalle todas las consultas y mutaciones SPARQL que el sistema utiliza para interactuar con GraphDB (nodos, aristas, inspector semántico y tareas del Pomodoro), consulta la [**Documentación de Consultas SPARQL**](SPARQL_QUERIES.md).
