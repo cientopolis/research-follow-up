@@ -7,6 +7,7 @@ interface RDFNode {
   x: number;
   y: number;
   status?: string;
+  thesisType?: string;
 }
 
 interface RDFConnection {
@@ -44,6 +45,10 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   ],
   'Topic': [
     { uri: 'http://example.org/resource/description', label: 'Descripción' }
+  ],
+  'Thesis': [
+    { uri: 'http://purl.org/ontology/bibo/degree', label: 'Grado Académico (bibo:degree)' },
+    { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' }
   ]
 };
 
@@ -114,12 +119,13 @@ SELECT ?s ?p ?o WHERE {
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX ex: <http://example.org/resource/>
 
-      SELECT DISTINCT ?node ?label ?type ?x ?y ?status WHERE {
+      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType WHERE {
         ?node rdf:type ?type .
         ?node rdfs:label ?label .
         OPTIONAL { ?node ex:posX ?x }
         OPTIONAL { ?node ex:posY ?y }
         OPTIONAL { ?node ex:status ?status }
+        OPTIONAL { ?node ex:thesisType ?thesisType }
         FILTER(STRSTARTS(STR(?node), "http://example.org/"))
       }
     `;
@@ -164,7 +170,8 @@ SELECT ?s ?p ?o WHERE {
             type,
             x: b.x ? parseFloat(b.x.value) : Math.random() * 400 + 100,
             y: b.y ? parseFloat(b.y.value) : Math.random() * 300 + 100,
-            status: b.status ? b.status.value : undefined
+            status: b.status ? b.status.value : undefined,
+            thesisType: b.thesisType ? b.thesisType.value : undefined
           };
         });
 
@@ -217,6 +224,7 @@ SELECT ?s ?p ?o WHERE {
     if (typeURI.includes('Project')) return DEFAULT_PROPERTIES_BY_TYPE['Project'];
     if (typeURI.includes('Article')) return DEFAULT_PROPERTIES_BY_TYPE['Article'];
     if (typeURI.includes('Topic')) return DEFAULT_PROPERTIES_BY_TYPE['Topic'];
+    if (typeURI.includes('Thesis')) return DEFAULT_PROPERTIES_BY_TYPE['Thesis'];
     return [];
   };
 
@@ -586,16 +594,27 @@ SELECT ?s ?p ?o WHERE {
     const x = Math.round((-pan.x + window.innerWidth / 2) / zoom);
     const y = Math.round((-pan.y + window.innerHeight / 2) / zoom);
 
+    let finalType = newNodeData.type;
+    let extraTriples = '';
+    if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#PhD') {
+      finalType = 'http://purl.org/ontology/bibo/Thesis';
+      extraTriples = `<${uri}> <http://example.org/resource/thesisType> "PhD Thesis" .`;
+    } else if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#Master') {
+      finalType = 'http://purl.org/ontology/bibo/Thesis';
+      extraTriples = `<${uri}> <http://example.org/resource/thesisType> "Magister" .`;
+    }
+
     const insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX ex: <http://example.org/resource/>
       
       INSERT DATA {
-        <${uri}> rdf:type <${newNodeData.type}> ;
+        <${uri}> rdf:type <${finalType}> ;
                  rdfs:label "${newNodeData.label}" ;
                  ex:posX ${x} ;
                  ex:posY ${y} .
+        ${extraTriples}
       }
     `;
 
@@ -657,7 +676,7 @@ SELECT ?s ?p ?o WHERE {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#advisor';
     } else if ((sourceNode.type.includes('GraduateStudent') || sourceNode.type.includes('UndergraduateStudent')) && targetNode.type.includes('Project')) {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#contributorTo';
-    } else if (sourceNode.type.includes('Article') && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
+    } else if ((sourceNode.type.includes('Article') || sourceNode.type.includes('Thesis')) && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
       suggestedPredicate = 'https://dblp.org/rdf/schema#authoredBy';
     } else if (sourceNode.type.includes('Article') && targetNode.type.includes('Topic')) {
       suggestedPredicate = 'http://purl.org/dc/terms/subject';
@@ -702,16 +721,26 @@ SELECT ?s ?p ?o WHERE {
     return uri;
   };
 
-  const getCleanType = (typeURI: string) => {
+  const getCleanType = (typeURI: string, thesisType?: string) => {
+    if (typeURI.includes('Thesis')) {
+      if (thesisType === 'PhD Thesis') return 'Tesis Doctoral';
+      if (thesisType === 'Magister') return 'Tesis de Maestría';
+      return 'Tesis';
+    }
     return getCleanLabel(typeURI);
   };
 
   // Helper selector helper mapping component styles
-  const getNodeComponentId = (type: string) => {
+  const getNodeComponentId = (type: string, thesisType?: string) => {
     if (type.includes('FacultyMember')) return 'nodeInvestigador';
     if (type.includes('GraduateStudent')) return 'nodeTesistaPosgrado';
     if (type.includes('UndergraduateStudent')) return 'nodeTesistaDeGrado';
     if (type.includes('Project')) return 'nodeProyecto';
+    if (type.includes('Thesis')) {
+      if (thesisType === 'PhD Thesis') return 'nodeTesisDoctoral';
+      if (thesisType === 'Magister') return 'nodeTesisMaestria';
+      return 'nodePaper';
+    }
     if (type.includes('InformationResource') || type.includes('AcademicArticle') || type.includes('Article') || type.includes('Publication')) return 'nodePaper';
     if (type.includes('Topic')) return 'nodeTopicCSO';
     return 'nodeCard';
@@ -848,7 +877,7 @@ SELECT ?s ?p ?o WHERE {
           {nodes.map((node) => {
             const isSelected = selectedNode?.uri === node.uri;
             const isConnectSrc = connectSourceNode === node.uri;
-            const nodeDomId = getNodeComponentId(node.type);
+            const nodeDomId = getNodeComponentId(node.type, node.thesisType);
 
             return (
               <div
@@ -864,7 +893,7 @@ SELECT ?s ?p ?o WHERE {
               >
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div className="flex-row flex-space">
-                  <span className="node-tag">{getCleanType(node.type)}</span>
+                  <span className="node-tag">{getCleanType(node.type, node.thesisType)}</span>
                   <div className="flex-row" style={{ gap: '6px' }}>
                     {node.status && <span style={{ fontSize: '0.7rem', color: 'var(--color-proyecto)' }}>{node.status}</span>}
                     <button 
@@ -1139,6 +1168,8 @@ SELECT ?s ?p ?o WHERE {
                 <option value="http://vivoweb.org/ontology/core#Project">Proyecto (vivo:Project)</option>
                 <option value="https://dblp.org/rdf/schema#Article">Paper (dblp:Article)</option>
                 <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
+                <option value="http://purl.org/ontology/bibo/Thesis#PhD">Tesis Doctoral (PhD Thesis)</option>
+                <option value="http://purl.org/ontology/bibo/Thesis#Master">Tesis de Maestría (Magister)</option>
               </select>
             </div>
             <div className="form-group">

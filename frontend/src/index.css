@@ -36,6 +36,8 @@
   --color-proyecto: #d20f39;     /* Red/Pink */
   --color-paper: #8839ef;        /* Purple */
   --color-topic: #179287;        /* Teal */
+  --color-tesis-doctoral: #fe640b; /* Peach */
+  --color-tesis-maestria: #df8e1d; /* Yellow */
   
   --accent: #df8e1d;             /* Yellow/Amber */
   --border-color: rgba(0, 0, 0, 0.08);
@@ -189,6 +191,22 @@ body, html, #root {
 #nodePaper .node-tag {
   background: rgba(203, 166, 247, 0.15);
   color: var(--color-paper);
+}
+
+#nodeTesisDoctoral {
+  border-left: 4px solid var(--color-tesis-doctoral);
+}
+#nodeTesisDoctoral .node-tag {
+  background: rgba(254, 100, 11, 0.1);
+  color: var(--color-tesis-doctoral);
+}
+
+#nodeTesisMaestria {
+  border-left: 4px solid var(--color-tesis-maestria);
+}
+#nodeTesisMaestria .node-tag {
+  background: rgba(223, 142, 29, 0.1);
+  color: var(--color-tesis-maestria);
 }
 
 #nodeTopicCSO {
