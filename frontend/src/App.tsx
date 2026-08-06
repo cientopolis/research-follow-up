@@ -108,7 +108,63 @@ SELECT ?s ?p ?o WHERE {
   ?s ?p ?o .
 } LIMIT 10`);
   const [sparqlResult, setSparqlResult] = useState<string>('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [activeRightPanel, setActiveRightPanel] = useState<'none' | 'sparql' | 'pomodoro'>('none');
+
+  // Pomodoro Timer State & Logic
+  const [pomodoroMode, setPomodoroMode] = useState<'work' | 'shortBreak' | 'longBreak'>('work');
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [customWorkTime, setCustomWorkTime] = useState(25);
+  const [customBreakTime, setCustomBreakTime] = useState(5);
+  const [completedCycles, setCompletedCycles] = useState(0);
+
+  const playChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.type = 'sine';
+      const now = audioCtx.currentTime;
+      
+      oscillator.frequency.setValueAtTime(880, now);
+      gainNode.gain.setValueAtTime(0.15, now);
+      
+      oscillator.frequency.setValueAtTime(1200, now + 0.15);
+      gainNode.gain.setValueAtTime(0.15, now + 0.15);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+      oscillator.start(now);
+      oscillator.stop(now + 0.8);
+    } catch (e) {
+      console.error("Audio Context failed", e);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any = null;
+    if (timerRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(t => t - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && timerRunning) {
+      setTimerRunning(false);
+      playChime();
+      
+      if (pomodoroMode === 'work') {
+        setCompletedCycles(c => c + 1);
+        setPomodoroMode('shortBreak');
+        setTimeLeft(customBreakTime * 60);
+      } else {
+        setPomodoroMode('work');
+        setTimeLeft(customWorkTime * 60);
+      }
+    }
+    return () => clearInterval(interval);
+  }, [timerRunning, timeLeft, pomodoroMode, customWorkTime, customBreakTime]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -1204,12 +1260,12 @@ SELECT ?s ?p ?o WHERE {
       )}
 
       {/* Semantic Sidebar */}
-      <div id="sidebarSemantic" className={sidebarCollapsed ? 'collapsed' : ''}>
+      <div id="sidebarSemantic" className={activeRightPanel === 'sparql' ? '' : 'collapsed'}>
         {isDev && <span className="dev-tag-badge">#sidebarSemantic</span>}
         <div className="sidebar-header">
           <h2>Consola SPARQL</h2>
-          <button className="btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-            {sidebarCollapsed ? '<<' : 'Ocultar'}
+          <button className="btn" onClick={() => setActiveRightPanel('none')}>
+            Ocultar
           </button>
         </div>
         <div className="sidebar-content">
@@ -1233,14 +1289,129 @@ SELECT ?s ?p ?o WHERE {
           </div>
         </div>
       </div>
-      {sidebarCollapsed && (
-        <button 
-          className="btn" 
-          style={{ position: 'absolute', top: 20, right: 20, zIndex: 100 }}
-          onClick={() => setSidebarCollapsed(false)}
-        >
-          Consola SPARQL
-        </button>
+
+      {/* Pomodoro Timer Sidebar */}
+      <div id="sidebarPomodoro" className={activeRightPanel === 'pomodoro' ? '' : 'collapsed'}>
+        {isDev && <span className="dev-tag-badge">#sidebarPomodoro</span>}
+        <div className="sidebar-header">
+          <h2>🍅 Pomodoro</h2>
+          <button className="btn" onClick={() => setActiveRightPanel('none')}>
+            Ocultar
+          </button>
+        </div>
+        <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '20px', overflowY: 'auto' }}>
+          
+          {/* Circular/Capsule Timer Display */}
+          <div className={`pomodoro-display ${pomodoroMode === 'work' ? 'work-mode' : 'break-mode'}`}>
+            <span className="pomodoro-time">
+              {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
+              {(timeLeft % 60).toString().padStart(2, '0')}
+            </span>
+            <span className="pomodoro-status-tag">
+              {pomodoroMode === 'work' ? 'TRABAJO' : 'RECREO'}
+            </span>
+          </div>
+
+          {/* Controls */}
+          <div className="flex-row" style={{ gap: '12px', justifyContent: 'center', width: '100%' }}>
+            <button 
+              className={`btn ${timerRunning ? 'btn-danger' : 'btn-primary'}`} 
+              onClick={() => setTimerRunning(!timerRunning)}
+              style={{ flex: 1 }}
+            >
+              {timerRunning ? '⏸️ Pausar' : '▶️ Iniciar'}
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => {
+                setTimerRunning(false);
+                setTimeLeft(pomodoroMode === 'work' ? customWorkTime * 60 : customBreakTime * 60);
+              }}
+            >
+              🔄 Reiniciar
+            </button>
+          </div>
+
+          {/* Presets and custom settings */}
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>PREAJUSTES</label>
+            <div className="flex-row" style={{ gap: '6px' }}>
+              <button className="btn btn-sm" onClick={() => {
+                setTimerRunning(false);
+                setPomodoroMode('work');
+                setTimeLeft(customWorkTime * 60);
+              }} style={{ flex: 1, fontSize: '0.75rem', padding: '6px' }}>Trabajo</button>
+              
+              <button className="btn btn-sm" onClick={() => {
+                setTimerRunning(false);
+                setPomodoroMode('shortBreak');
+                setTimeLeft(5 * 60);
+              }} style={{ flex: 1, fontSize: '0.75rem', padding: '6px' }}>Recreo (5m)</button>
+
+              <button className="btn btn-sm" onClick={() => {
+                setTimerRunning(false);
+                setPomodoroMode('longBreak');
+                setTimeLeft(15 * 60);
+              }} style={{ flex: 1, fontSize: '0.75rem', padding: '6px' }}>Largo (15m)</button>
+            </div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '8px 0' }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>CONFIGURACIÓN</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Minutos Trabajo:</span>
+                <input 
+                  type="number" 
+                  value={customWorkTime} 
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value) || 25);
+                    setCustomWorkTime(val);
+                    if (!timerRunning && pomodoroMode === 'work') setTimeLeft(val * 60);
+                  }}
+                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)' }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Minutos Recreo:</span>
+                <input 
+                  type="number" 
+                  value={customBreakTime} 
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value) || 5);
+                    setCustomBreakTime(val);
+                    if (!timerRunning && pomodoroMode === 'shortBreak') setTimeLeft(val * 60);
+                  }}
+                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{ width: '100%', marginTop: 'auto', background: 'var(--bg-crust)', padding: '12px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ESTADÍSTICAS</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Pomodoros Completados:</span>
+              <span style={{ fontSize: '1.1rem', marginTop: '4px' }}>
+                {completedCycles > 0 ? Array(completedCycles).fill('🍅').join(' ') : 'Ninguno todavía'}
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Floating Toggle Buttons (Open Panels) */}
+      {activeRightPanel === 'none' && (
+        <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 100, display: 'flex', gap: '10px' }}>
+          <button className="btn" onClick={() => setActiveRightPanel('sparql')}>
+            Consola SPARQL
+          </button>
+          <button className="btn btn-primary" onClick={() => setActiveRightPanel('pomodoro')}>
+            ⏱️ Pomodoro
+          </button>
+        </div>
       )}
     </div>
   );
