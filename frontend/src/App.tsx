@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface RDFNode {
   uri: string;
@@ -64,6 +64,18 @@ export default function App() {
   const [newPropURI, setNewPropURI] = useState('');
   const [newPropVal, setNewPropVal] = useState('');
   const [isAddingCustomProp, setIsAddingCustomProp] = useState(false);
+
+  // Dynamic Node Card Heights tracking
+  const [nodeHeights, setNodeHeights] = useState<{ [uri: string]: number }>({});
+  const nodeRef = useCallback((el: HTMLDivElement | null, uri: string) => {
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setNodeHeights(prev => {
+        if (prev[uri] === rect.height) return prev;
+        return { ...prev, [uri]: rect.height };
+      });
+    }
+  }, []);
   
   // Navigation / Canvas Transforms
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -755,11 +767,18 @@ SELECT ?s ?p ?o WHERE {
               
               if (!fromNode || !toNode) return null;
 
+              // Retrieve measured heights, fallback to 80px
+              const hFrom = nodeHeights[conn.from] || 80;
+              const hTo = nodeHeights[conn.to] || 80;
+
               // Node Centers
               let cx1 = fromNode.x + 110;
-              let cy1 = fromNode.y + 40;
+              let cy1 = fromNode.y + hFrom / 2;
               let cx2 = toNode.x + 110;
-              let cy2 = toNode.y + 40;
+              let cy2 = toNode.y + hTo / 2;
+              
+              let fromHeight = hFrom;
+              let toHeight = hTo;
 
               // Si la relación es vivo:advisor y está guardada en sentido Estudiante -> Investigador,
               // invertimos visualmente el origen y destino para que la flecha apunte del Investigador al Estudiante.
@@ -768,15 +787,17 @@ SELECT ?s ?p ?o WHERE {
                 const isToFaculty = toNode.type.includes('FacultyMember');
                 if (isFromStudent && isToFaculty) {
                   cx1 = toNode.x + 110;
-                  cy1 = toNode.y + 40;
+                  cy1 = toNode.y + hTo / 2;
                   cx2 = fromNode.x + 110;
-                  cy2 = fromNode.y + 40;
+                  cy2 = fromNode.y + hFrom / 2;
+                  fromHeight = hTo;
+                  toHeight = hFrom;
                 }
               }
 
               // Border Intersections
-              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2);
-              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1);
+              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 220, fromHeight);
+              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 220, toHeight);
 
               const x1 = startPt.x;
               const y1 = startPt.y;
@@ -832,6 +853,7 @@ SELECT ?s ?p ?o WHERE {
             return (
               <div
                 key={node.uri}
+                ref={(el) => nodeRef(el, node.uri)}
                 id={nodeDomId}
                 className={`node-card ${isSelected ? 'selected' : ''}`}
                 style={{
