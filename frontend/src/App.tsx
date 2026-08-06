@@ -118,31 +118,79 @@ SELECT ?s ?p ?o WHERE {
   const [customBreakTime, setCustomBreakTime] = useState(5);
   const [completedCycles, setCompletedCycles] = useState(0);
 
-  const playChime = () => {
+  // UX Options
+  const [selectedSound, setSelectedSound] = useState<'chime' | 'bell' | 'digital'>('chime');
+  const [soundVolume, setSoundVolume] = useState(0.5);
+  const [autoStartBreak, setAutoStartBreak] = useState(true);
+  const [autoStartWork, setAutoStartWork] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationsEnabled(permission === 'granted');
+    }
+  };
+
+  const sendDesktopNotification = (title: string, body: string) => {
+    if (notificationsEnabled && 'Notification' in window) {
+      new Notification(title, { body, icon: '🍅' });
+    }
+  };
+
+  const playAlertSound = () => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
+      const playTone = (freq: number, type: OscillatorType, start: number, duration: number, volStart: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(volStart * soundVolume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        
+        osc.start(start);
+        osc.stop(start + duration);
+      };
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.type = 'sine';
       const now = audioCtx.currentTime;
-      
-      oscillator.frequency.setValueAtTime(880, now);
-      gainNode.gain.setValueAtTime(0.15, now);
-      
-      oscillator.frequency.setValueAtTime(1200, now + 0.15);
-      gainNode.gain.setValueAtTime(0.15, now + 0.15);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-
-      oscillator.start(now);
-      oscillator.stop(now + 0.8);
+      if (selectedSound === 'chime') {
+        playTone(880, 'sine', now, 0.4, 0.2);
+        playTone(1200, 'sine', now + 0.15, 0.6, 0.2);
+      } else if (selectedSound === 'bell') {
+        const freqs = [440, 554, 659, 880, 1200];
+        freqs.forEach((f) => playTone(f, 'triangle', now, 1.2, 0.1));
+      } else if (selectedSound === 'digital') {
+        playTone(2000, 'square', now, 0.1, 0.15);
+        playTone(2000, 'square', now + 0.15, 0.1, 0.15);
+        playTone(2000, 'square', now + 0.3, 0.1, 0.15);
+      }
     } catch (e) {
       console.error("Audio Context failed", e);
     }
   };
+
+  // Sync Timer with Page Tab Title
+  useEffect(() => {
+    if (timerRunning) {
+      const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+      const seconds = (timeLeft % 60).toString().padStart(2, '0');
+      const emoji = pomodoroMode === 'work' ? '🍅' : '🍃';
+      document.title = `(${minutes}:${seconds}) ${emoji} Canvas`;
+    } else {
+      document.title = "Spatial Semantic Canvas";
+    }
+  }, [timeLeft, timerRunning, pomodoroMode]);
+
+  // Request notification permission on mount if available
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      setNotificationsEnabled(true);
+    }
+  }, []);
 
   useEffect(() => {
     let interval: any = null;
@@ -152,19 +200,27 @@ SELECT ?s ?p ?o WHERE {
       }, 1000);
     } else if (timeLeft === 0 && timerRunning) {
       setTimerRunning(false);
-      playChime();
+      playAlertSound();
       
       if (pomodoroMode === 'work') {
         setCompletedCycles(c => c + 1);
+        sendDesktopNotification("¡Buen trabajo! 🍅", "Tiempo de tomar un descanso.");
         setPomodoroMode('shortBreak');
         setTimeLeft(customBreakTime * 60);
+        if (autoStartBreak) {
+          setTimeout(() => setTimerRunning(true), 500);
+        }
       } else {
+        sendDesktopNotification("¡De vuelta al trabajo! 🎯", "Comienza una nueva sesión de enfoque.");
         setPomodoroMode('work');
         setTimeLeft(customWorkTime * 60);
+        if (autoStartWork) {
+          setTimeout(() => setTimerRunning(true), 500);
+        }
       }
     }
     return () => clearInterval(interval);
-  }, [timerRunning, timeLeft, pomodoroMode, customWorkTime, customBreakTime]);
+  }, [timerRunning, timeLeft, pomodoroMode, customWorkTime, customBreakTime, selectedSound, soundVolume, autoStartBreak, autoStartWork, notificationsEnabled]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -1299,17 +1355,29 @@ SELECT ?s ?p ?o WHERE {
             Ocultar
           </button>
         </div>
-        <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '20px', overflowY: 'auto' }}>
+        <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '16px 20px', overflowY: 'auto' }}>
           
-          {/* Circular/Capsule Timer Display */}
-          <div className={`pomodoro-display ${pomodoroMode === 'work' ? 'work-mode' : 'break-mode'}`}>
-            <span className="pomodoro-time">
-              {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
-              {(timeLeft % 60).toString().padStart(2, '0')}
-            </span>
-            <span className="pomodoro-status-tag">
-              {pomodoroMode === 'work' ? 'TRABAJO' : 'RECREO'}
-            </span>
+          {/* Circular SVG Radial Progress Timer Display */}
+          <div className={`pomodoro-display ${pomodoroMode === 'work' ? 'work-mode' : 'break-mode'}`} style={{ position: 'relative' }}>
+            <svg width="170" height="170" viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+              <circle cx="50" cy="50" r="46" fill="none" stroke="var(--border-color)" strokeWidth="3" />
+              <circle cx="50" cy="50" r="46" fill="none" 
+                      stroke={pomodoroMode === 'work' ? 'var(--color-proyecto)' : 'var(--color-tesista)'} 
+                      strokeWidth="5" 
+                      strokeDasharray="289" 
+                      strokeDashoffset={289 - (289 * timeLeft) / ((pomodoroMode === 'work' ? customWorkTime : customBreakTime) * 60)} 
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 0.5s linear' }} />
+            </svg>
+            <div style={{ zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <span className="pomodoro-time">
+                {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
+                {(timeLeft % 60).toString().padStart(2, '0')}
+              </span>
+              <span className="pomodoro-status-tag">
+                {pomodoroMode === 'work' ? 'TRABAJO' : 'RECREO'}
+              </span>
+            </div>
           </div>
 
           {/* Controls */}
@@ -1355,10 +1423,11 @@ SELECT ?s ?p ?o WHERE {
               }} style={{ flex: 1, fontSize: '0.75rem', padding: '6px' }}>Largo (15m)</button>
             </div>
 
-            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '8px 0' }} />
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>CONFIGURACIÓN</label>
+              
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <span style={{ fontSize: '0.75rem' }}>Minutos Trabajo:</span>
                 <input 
@@ -1369,7 +1438,7 @@ SELECT ?s ?p ?o WHERE {
                     setCustomWorkTime(val);
                     if (!timerRunning && pomodoroMode === 'work') setTimeLeft(val * 60);
                   }}
-                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)' }}
+                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -1382,14 +1451,91 @@ SELECT ?s ?p ?o WHERE {
                     setCustomBreakTime(val);
                     if (!timerRunning && pomodoroMode === 'shortBreak') setTimeLeft(val * 60);
                   }}
-                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)' }}
+                  style={{ width: '60px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
+                />
+              </div>
+
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '6px 0' }} />
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>UX & ALERTAS</label>
+
+              {/* Desktop Notifications Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Notificaciones:</span>
+                <button 
+                  className={`btn ${notificationsEnabled ? 'btn-success' : 'btn-secondary'}`} 
+                  onClick={requestNotificationPermission}
+                  style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                >
+                  {notificationsEnabled ? '🔔 Activas' : '🔕 Permitir'}
+                </button>
+              </div>
+
+              {/* Sound Type Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Sonido Alerta:</span>
+                <select 
+                  value={selectedSound} 
+                  onChange={(e) => setSelectedSound(e.target.value as any)}
+                  style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
+                >
+                  <option value="chime">Suave (Carillón)</option>
+                  <option value="bell">Clásico (Campana)</option>
+                  <option value="digital">Digital (Beep Beep)</option>
+                </select>
+              </div>
+
+              {/* Volume Slider */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Volumen:</span>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.1" 
+                  value={soundVolume} 
+                  onChange={(e) => {
+                    const vol = parseFloat(e.target.value);
+                    setSoundVolume(vol);
+                    try {
+                      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                      const osc = ctx.createOscillator();
+                      const gain = ctx.createGain();
+                      osc.connect(gain);
+                      gain.connect(ctx.destination);
+                      osc.frequency.setValueAtTime(600, ctx.currentTime);
+                      gain.gain.setValueAtTime(0.05 * vol, ctx.currentTime);
+                      osc.start();
+                      osc.stop(ctx.currentTime + 0.08);
+                    } catch(e) {}
+                  }}
+                  style={{ width: '80px', accentColor: 'var(--accent)' }}
+                />
+              </div>
+
+              {/* Auto-start toggles */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Auto-iniciar Recreo:</span>
+                <input 
+                  type="checkbox" 
+                  checked={autoStartBreak} 
+                  onChange={(e) => setAutoStartBreak(e.target.checked)}
+                  style={{ accentColor: 'var(--color-tesista)' }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Auto-iniciar Trabajo:</span>
+                <input 
+                  type="checkbox" 
+                  checked={autoStartWork} 
+                  onChange={(e) => setAutoStartWork(e.target.checked)}
+                  style={{ accentColor: 'var(--color-proyecto)' }}
                 />
               </div>
             </div>
           </div>
 
           {/* Stats */}
-          <div style={{ width: '100%', marginTop: 'auto', background: 'var(--bg-crust)', padding: '12px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ width: '100%', background: 'var(--bg-crust)', padding: '12px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ESTADÍSTICAS</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Pomodoros Completados:</span>
