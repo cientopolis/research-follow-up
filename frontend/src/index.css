@@ -87,6 +87,7 @@ body, html, #root {
   height: 100%;
   pointer-events: none;
   z-index: 1;
+  overflow: visible !important;
 }
 
 /* Nodes Styling */

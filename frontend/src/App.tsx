@@ -216,14 +216,22 @@ SELECT ?s ?p ?o WHERE {
     const halfW = w / 2;
     const halfH = h / 2;
 
-    // Try vertical borders of source card (xSrc + tX)
+    // Proteger contra divisiones por cero (alineaciones exactas)
+    if (Math.abs(dx) < 0.001) {
+      return { x: xSrc, y: ySrc + (dy > 0 ? halfH : -halfH) };
+    }
+    if (Math.abs(dy) < 0.001) {
+      return { x: xSrc + (dx > 0 ? halfW : -halfW), y: ySrc };
+    }
+
+    // Probar bordes verticales (izq / der)
     const tX = dx > 0 ? halfW : -halfW;
     const yProj = ySrc + (dy / dx) * tX;
     if (yProj >= ySrc - halfH && yProj <= ySrc + halfH) {
       return { x: xSrc + tX, y: yProj };
     }
 
-    // Try horizontal borders of source card (ySrc + tY)
+    // Probar bordes horizontales (arr / abj)
     const tY = dy > 0 ? halfH : -halfH;
     const xProj = xSrc + (dx / dy) * tY;
     return { x: xProj, y: ySrc + tY };
