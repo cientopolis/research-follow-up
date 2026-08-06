@@ -114,3 +114,10 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   `Paper` $\rightarrow$ `Tópico CSO`: sugiere `dct:subject`.
 *   **Persistencia de Coordenadas**: Al arrastrar nodos, sus nuevas posiciones se actualizan en GraphDB usando los predicados auxiliares `ex:posX` y `ex:posY`.
 *   **Eliminación Segura**: Un botón con cruz roja (`❌`) permite remover cualquier nodo del canvas, ejecutando un query `DELETE WHERE` en GraphDB que remueve el recurso y todas sus aristas conectadas para evitar referencias rotas en el grafo.
+*   **Inspector Semántico Modal Avanzado (`#inspectorSemantico`)**:
+    *   **Layout Centrado con Backdrop**: Oclusión traslúcida y difuminada (`backdrop-filter`) que aísla visualmente el canvas al abrir las propiedades para concentrarse en la edición.
+    *   **Organización Colapsable**: Paneles plegables divididos en *Datos Básicos* (label editable), *Propiedades de la Ontología* (campos específicos y dinámicos) e *Metadatos del Sistema* (URIs y tipo RDF de sólo lectura con opción de copiado al portapapeles).
+    *   **Edición Dinámica Híbrida**: Muestra de forma inteligente propiedades sugeridas según la clase (ej. correos para tesistas, DOIs para papers, etc.) y ofrece un selector asíncrono para añadir otras propiedades datatype encontradas en GraphDB o personalizables por URI.
+    *   **Validadores y Prevención de Errores**: Filtros RegExp en tiempo real y al guardar para formatos de correo electrónico, números enteros de año, fechas YYYY-MM-DD y DOIs normalizados.
+    *   **Persistencia Semántica Limpia**: Operación transaccional `DELETE/INSERT` que actualiza los triples modificados y depura propiedades vacías en el triplestore.
+
