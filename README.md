@@ -120,4 +120,15 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Edición Dinámica Híbrida**: Muestra de forma inteligente propiedades sugeridas según la clase (ej. correos para tesistas, DOIs para papers, etc.) y ofrece un selector asíncrono para añadir otras propiedades datatype encontradas en GraphDB o personalizables por URI.
     *   **Validadores y Prevención de Errores**: Filtros RegExp en tiempo real y al guardar para formatos de correo electrónico, números enteros de año, fechas YYYY-MM-DD y DOIs normalizados.
     *   **Persistencia Semántica Limpia**: Operación transaccional `DELETE/INSERT` que actualiza los triples modificados y depura propiedades vacías en el triplestore.
+*   **Integración de Tesis Semánticas (PhD Thesis & Magister)**:
+    *   **Modelado Semántico**: Ambos tipos de tesis se asocian bajo la clase estándar de VIVO `bibo:Thesis` y se diferencian semánticamente en el triplestore mediante el atributo `<http://example.org/resource/thesisType>` con valor `"PhD Thesis"` o `"Magister"`.
+    *   **Estilos Diferenciados**:
+        *   Tesis Doctoral (`#nodeTesisDoctoral`): Tarjeta visual con borde naranja melocotón (`#fe640b`).
+        *   Tesis de Maestría (`#nodeTesisMaestria`): Tarjeta visual con borde amarillo ámbar (`#df8e1d`).
+    *   **Regla de Conectores**: Al vincular la Tesis con un Alumno en el Canvas, el sistema sugiere y graba automáticamente la relación `dblp:authoredBy` (Tesis $\rightarrow$ `authoredBy` $\rightarrow$ Alumno).
+*   **Temporizador Pomodoro Avanzado (`#sidebarPomodoro`)**:
+    *   **Interfaz de Alta Fidelidad (UX)**: Panel deslizable en la parte derecha con un arco circular dinámico SVG que se reduce y cambia de color en tiempo real (rojo para Trabajo, verde para Recreo).
+    *   **Sonido de Foco (Tic-Tac)**: Sonido opcional y alternado (Tic/Tac en segundos pares/impares) sintetizado nativamente en tres alternativas: *Clásico (Seno)*, *Madera (Woodblock)* y *Moderno (Cepillo)*.
+    *   **Alertas y Notificaciones**: Generación de alarmas sonoras e integración de notificaciones nativas de escritorio (Push) del sistema operativo al concluir los ciclos.
+    *   **Flujo Inteligente**: Opciones de inicio automático de descansos o trabajo consecutivo y almacenamiento persistente del contexto de audio para prevenir desconexiones y asegurar un funcionamiento continuo de alta fidelidad.
 
