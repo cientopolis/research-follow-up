@@ -748,10 +748,23 @@ SELECT ?s ?p ?o WHERE {
               if (!fromNode || !toNode) return null;
 
               // Node Centers
-              const cx1 = fromNode.x + 110;
-              const cy1 = fromNode.y + 40;
-              const cx2 = toNode.x + 110;
-              const cy2 = toNode.y + 40;
+              let cx1 = fromNode.x + 110;
+              let cy1 = fromNode.y + 40;
+              let cx2 = toNode.x + 110;
+              let cy2 = toNode.y + 40;
+
+              // Si la relación es vivo:advisor y está guardada en sentido Estudiante -> Investigador,
+              // invertimos visualmente el origen y destino para que la flecha apunte del Investigador al Estudiante.
+              if (conn.predicate === 'http://vivoweb.org/ontology/core#advisor') {
+                const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
+                const isToFaculty = toNode.type.includes('FacultyMember');
+                if (isFromStudent && isToFaculty) {
+                  cx1 = toNode.x + 110;
+                  cy1 = toNode.y + 40;
+                  cx2 = fromNode.x + 110;
+                  cy2 = fromNode.y + 40;
+                }
+              }
 
               // Border Intersections
               const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2);
