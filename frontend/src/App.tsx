@@ -208,6 +208,27 @@ SELECT ?s ?p ?o WHERE {
     return [];
   };
 
+  const getCardBorderPoint = (xSrc: number, ySrc: number, xDst: number, yDst: number, w = 220, h = 80) => {
+    const dx = xDst - xSrc;
+    const dy = yDst - ySrc;
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return { x: xSrc, y: ySrc };
+
+    const halfW = w / 2;
+    const halfH = h / 2;
+
+    // Try vertical borders of source card (xSrc + tX)
+    const tX = dx > 0 ? halfW : -halfW;
+    const yProj = ySrc + (dy / dx) * tX;
+    if (yProj >= ySrc - halfH && yProj <= ySrc + halfH) {
+      return { x: xSrc + tX, y: yProj };
+    }
+
+    // Try horizontal borders of source card (ySrc + tY)
+    const tY = dy > 0 ? halfH : -halfH;
+    const xProj = xSrc + (dx / dy) * tY;
+    return { x: xProj, y: ySrc + tY };
+  };
+
   const fetchNodeDetails = async (nodeURI: string) => {
     const query = `
       SELECT ?predicate ?value WHERE {
@@ -716,8 +737,8 @@ SELECT ?s ?p ?o WHERE {
           {/* Dynamic SVG Connections Overlay */}
           <svg className="canvas-connections">
             <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#a6adc8" />
+              <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#8c8fa1" />
               </marker>
             </defs>
             {connections.map((conn) => {
@@ -726,11 +747,20 @@ SELECT ?s ?p ?o WHERE {
               
               if (!fromNode || !toNode) return null;
 
-              // Node Dimensions: 220px width, ~80px height
-              const x1 = fromNode.x + 110;
-              const y1 = fromNode.y + 40;
-              const x2 = toNode.x + 110;
-              const y2 = toNode.y + 40;
+              // Node Centers
+              const cx1 = fromNode.x + 110;
+              const cy1 = fromNode.y + 40;
+              const cx2 = toNode.x + 110;
+              const cy2 = toNode.y + 40;
+
+              // Border Intersections
+              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2);
+              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1);
+
+              const x1 = startPt.x;
+              const y1 = startPt.y;
+              const x2 = endPt.x;
+              const y2 = endPt.y;
 
               const mx = (x1 + x2) / 2;
               const my = (y1 + y2) / 2;
