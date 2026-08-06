@@ -86,7 +86,7 @@ body, html, #root {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 1;
+  z-index: 15; /* Dibujar encima de las tarjetas (z-index: 10) para evitar que tapen la flecha */
   overflow: visible !important;
 }
 
