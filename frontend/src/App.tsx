@@ -124,6 +124,28 @@ SELECT ?s ?p ?o WHERE {
   const [autoStartBreak, setAutoStartBreak] = useState(true);
   const [autoStartWork, setAutoStartWork] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [enableTickTock, setEnableTickTock] = useState(true);
+
+  const playTickTock = (isEven: boolean) => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(isEven ? 1600 : 1200, audioCtx.currentTime);
+      
+      const tickVolume = 0.015 * soundVolume; // Very quiet focus tick
+      gain.gain.setValueAtTime(tickVolume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.03);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.04);
+    } catch (e) {}
+  };
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
@@ -196,7 +218,13 @@ SELECT ?s ?p ?o WHERE {
     let interval: any = null;
     if (timerRunning && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft(t => t - 1);
+        setTimeLeft(t => {
+          const next = t - 1;
+          if (enableTickTock && next >= 0) {
+            playTickTock(next % 2 === 0);
+          }
+          return next;
+        });
       }, 1000);
     } else if (timeLeft === 0 && timerRunning) {
       setTimerRunning(false);
@@ -220,7 +248,7 @@ SELECT ?s ?p ?o WHERE {
       }
     }
     return () => clearInterval(interval);
-  }, [timerRunning, timeLeft, pomodoroMode, customWorkTime, customBreakTime, selectedSound, soundVolume, autoStartBreak, autoStartWork, notificationsEnabled]);
+  }, [timerRunning, timeLeft, pomodoroMode, customWorkTime, customBreakTime, selectedSound, soundVolume, autoStartBreak, autoStartWork, notificationsEnabled, enableTickTock]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -1509,6 +1537,17 @@ SELECT ?s ?p ?o WHERE {
                     } catch(e) {}
                   }}
                   style={{ width: '80px', accentColor: 'var(--accent)' }}
+                />
+              </div>
+
+              {/* Tic-Tock Sound Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem' }}>Sonido Tic-Tac (Foco):</span>
+                <input 
+                  type="checkbox" 
+                  checked={enableTickTock} 
+                  onChange={(e) => setEnableTickTock(e.target.checked)}
+                  style={{ accentColor: 'var(--accent)' }}
                 />
               </div>
 
