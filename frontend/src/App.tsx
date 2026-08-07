@@ -5,6 +5,7 @@ import type { User } from 'firebase/auth';
 import { auth } from './firebase';
 import { AuthScreen } from './components/AuthScreen';
 import { NodeAvatar } from './components/NodeAvatar';
+import { IconPicker } from './components/IconPicker';
 
 interface RDFNode {
   uri: string;
@@ -111,6 +112,10 @@ export default function App() {
 
   // Node photos — stored as data URLs keyed by node URI
   const [nodePhotos, setNodePhotos] = useState<{ [uri: string]: string }>({});
+  // Node custom icons — Phosphor icon name keyed by node URI (null = use automatic avatar)
+  const [nodeIcons, setNodeIcons] = useState<{ [uri: string]: string | null }>({});
+  // Tab state for the avatar editor in the inspector
+  const [avatarTab, setAvatarTab] = useState<'photo' | 'icon'>('photo');
 
   const handlePhotoUpload = useCallback((nodeUri: string, file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -1433,6 +1438,7 @@ SELECT ?s ?p ?o WHERE {
                     nodeType={nodeDomId}
                     seed={node.uri}
                     photoUrl={nodePhotos[node.uri]}
+                    iconName={nodeIcons[node.uri]}
                     size={40}
                     chipColor={chip.chipColor}
                   />
@@ -1527,23 +1533,52 @@ SELECT ?s ?p ?o WHERE {
                           )}
                         </div>
 
-                        {/* Photo / Avatar upload */}
+                        {/* Photo / Icon section — tabbed */}
                         <div className="form-group">
                           <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            🖼️ Foto / Avatar del nodo
+                            🖼️ Imagen / Ícono del nodo
                           </label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            {/* Preview */}
+
+                          {/* Preview + tab switcher */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '10px' }}>
                             <div style={{ flexShrink: 0 }}>
                               <NodeAvatar
                                 nodeType={getNodeComponentId(selectedNode.type, selectedNode.thesisType)}
                                 seed={selectedNode.uri}
                                 photoUrl={nodePhotos[selectedNode.uri]}
-                                size={56}
+                                iconName={nodeIcons[selectedNode.uri]}
+                                size={60}
                                 chipColor="#6c6f85"
                               />
                             </div>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {/* Tab buttons */}
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {(['photo', 'icon'] as const).map(tab => (
+                                <button
+                                  key={tab}
+                                  onClick={() => setAvatarTab(tab)}
+                                  style={{
+                                    padding: '5px 14px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    background: avatarTab === tab ? '#6c6f85' : 'var(--bg-surface)',
+                                    color: avatarTab === tab ? '#fff' : 'var(--text-muted)',
+                                    border: '1.5px solid var(--border-color)',
+                                    transition: 'all 0.15s',
+                                  }}
+                                >
+                                  {tab === 'photo' ? '📷 Foto' : '🏷️ Ícono'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Tab: Photo */}
+                          {avatarTab === 'photo' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               <label
                                 id="photoUploadLabel"
                                 htmlFor="photoUploadInput"
@@ -1553,6 +1588,7 @@ SELECT ?s ?p ?o WHERE {
                                   background: 'var(--bg-surface)', border: '1px dashed var(--border-color)',
                                   borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-main)',
                                   transition: 'background 0.15s',
+                                  alignSelf: 'flex-start',
                                 }}
                               >
                                 📁 Elegir foto…
@@ -1564,14 +1600,18 @@ SELECT ?s ?p ?o WHERE {
                                 style={{ display: 'none' }}
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
-                                  if (file) handlePhotoUpload(selectedNode.uri, file);
+                                  if (file) {
+                                    handlePhotoUpload(selectedNode.uri, file);
+                                    // Photo takes priority — clear any custom icon
+                                    setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: null }));
+                                  }
                                   e.target.value = '';
                                 }}
                               />
                               {nodePhotos[selectedNode.uri] && (
                                 <button
                                   className="btn"
-                                  style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#d20f39' }}
+                                  style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#d20f39', alignSelf: 'flex-start' }}
                                   onClick={() => setNodePhotos(prev => {
                                     const next = { ...prev };
                                     delete next[selectedNode.uri];
@@ -1583,11 +1623,30 @@ SELECT ?s ?p ?o WHERE {
                               )}
                               {!nodePhotos[selectedNode.uri] && (
                                 <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                  Se mostrará el avatar generado automáticamente
+                                  Sin foto. Se usa el avatar o ícono seleccionado.
                                 </span>
                               )}
                             </div>
-                          </div>
+                          )}
+
+                          {/* Tab: Icon picker */}
+                          {avatarTab === 'icon' && (
+                            <IconPicker
+                              selectedIcon={nodeIcons[selectedNode.uri] ?? null}
+                              onSelect={(name) => {
+                                setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
+                                // Choosing an icon clears any uploaded photo
+                                if (name) {
+                                  setNodePhotos(prev => {
+                                    const next = { ...prev };
+                                    delete next[selectedNode.uri];
+                                    return next;
+                                  });
+                                }
+                              }}
+                              chipColor="#6c6f85"
+                            />
+                          )}
                         </div>
                       </div>
                     )}
