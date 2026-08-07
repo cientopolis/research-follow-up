@@ -1253,73 +1253,118 @@ SELECT ?s ?p ?o WHERE {
             const isSelf = node.uri === associatedResearcher;
             const nodeDomId = getNodeComponentId(node.type, node.thesisType);
 
+            // Tinted Chips palette — guaranteed inline so CSS specificity never interferes
+            const chipPalette: Record<string, { bg: string; chipColor: string; titleColor: string; tagBg: string; tagColor: string }> = {
+              nodeInvestigador:   { bg: 'rgba(219, 234, 254, 0.9)',  chipColor: '#1e66f5', titleColor: '#1e3a8a', tagBg: 'rgba(30,102,245,0.15)',  tagColor: '#1e3a8a' },
+              nodeTesistaPosgrado:{ bg: 'rgba(209, 250, 229, 0.9)',  chipColor: '#16a34a', titleColor: '#14532d', tagBg: 'rgba(22,163,74,0.15)',   tagColor: '#14532d' },
+              nodeTesistaDeGrado: { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0891b2', titleColor: '#164e63', tagBg: 'rgba(8,145,178,0.15)',   tagColor: '#164e63' },
+              nodeProyecto:       { bg: 'rgba(254, 226, 226, 0.9)',  chipColor: '#dc2626', titleColor: '#7f1d1d', tagBg: 'rgba(220,38,38,0.15)',   tagColor: '#7f1d1d' },
+              nodePaper:          { bg: 'rgba(237, 233, 254, 0.9)',  chipColor: '#7c3aed', titleColor: '#4c1d95', tagBg: 'rgba(124,58,237,0.15)',  tagColor: '#4c1d95' },
+              nodeTesisDoctoral:  { bg: 'rgba(255, 237, 213, 0.9)',  chipColor: '#ea580c', titleColor: '#7c2d12', tagBg: 'rgba(234,88,12,0.15)',   tagColor: '#7c2d12' },
+              nodeTesisMaestria:  { bg: 'rgba(254, 249, 195, 0.9)',  chipColor: '#ca8a04', titleColor: '#713f12', tagBg: 'rgba(202,138,4,0.15)',   tagColor: '#713f12' },
+              nodeTopicCSO:       { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0d9488', titleColor: '#134e4a', tagBg: 'rgba(13,148,136,0.15)',  tagColor: '#134e4a' },
+            };
+            const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
+
             return (
               <div
                 key={node.uri}
                 ref={(el) => nodeRef(el, node.uri)}
                 id={node.uri}
-                className={`node-card ${nodeDomId} ${isSelected ? 'selected' : ''}`}
+                className={`node-card ${isSelected ? 'selected' : ''}`}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px)`,
-                  border: isConnectSrc 
-                    ? '2.5px solid var(--accent)' 
-                    : isSelf 
-                      ? '2.5px solid var(--color-investigador)' 
-                      : undefined,
-                  boxShadow: isSelf 
-                    ? '0 0 15px rgba(180, 190, 254, 0.5)' 
-                    : undefined
+                  background: chip.bg,
+                  border: isConnectSrc
+                    ? '2px dashed #f59e0b'
+                    : isSelected
+                      ? `2px solid ${chip.chipColor}`
+                      : '1.5px solid transparent',
+                  boxShadow: isSelected
+                    ? `0 0 0 3px ${chip.chipColor}22, 0 4px 16px rgba(0,0,0,0.10)`
+                    : isSelf
+                      ? `0 0 18px ${chip.chipColor}55, 0 4px 16px rgba(0,0,0,0.08)`
+                      : '0 2px 8px rgba(0,0,0,0.07)',
+                  backdropFilter: 'none',
+                  outline: isSelf ? `2px solid ${chip.chipColor}` : 'none',
+                  outlineOffset: '2px',
                 }}
                 onMouseDown={(e) => startDragNode(e, node)}
               >
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
-                <div className="flex-row flex-space">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="node-tag">{getCleanType(node.type, node.thesisType)}</span>
-                    {isSelf && (
-                      <span style={{ 
-                        fontSize: '0.65rem', 
-                        fontWeight: 'bold', 
-                        background: 'var(--color-investigador)', 
-                        color: 'var(--bg-base)', 
-                        padding: '2px 6px', 
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Color chip icon */}
+                  <span style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    background: chip.chipColor,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.8rem',
+                    color: '#fff',
+                    boxShadow: `0 2px 6px ${chip.chipColor}55`,
+                  }}>
+                    {nodeDomId === 'nodeInvestigador' ? '👤'
+                      : nodeDomId === 'nodeTesistaPosgrado' ? '🎓'
+                      : nodeDomId === 'nodeTesistaDeGrado' ? '📚'
+                      : nodeDomId === 'nodeProyecto' ? '🔬'
+                      : nodeDomId === 'nodePaper' ? '📄'
+                      : nodeDomId === 'nodeTesisDoctoral' ? '🏅'
+                      : nodeDomId === 'nodeTesisMaestria' ? '🎖️'
+                      : nodeDomId === 'nodeTopicCSO' ? '🏷️'
+                      : '🔷'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: '0.58rem',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.4px',
+                        background: chip.tagBg,
+                        color: chip.tagColor,
+                        padding: '1px 5px',
                         borderRadius: '4px',
-                        display: 'inline-block'
-                      }}>
-                        Este sos vos
-                      </span>
-                    )}
+                      }}>{getCleanType(node.type, node.thesisType)}</span>
+                      {isSelf && (
+                        <span style={{
+                          fontSize: '0.58rem',
+                          fontWeight: 700,
+                          background: chip.chipColor,
+                          color: '#fff',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                        }}>Este sos vos</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-row" style={{ gap: '6px' }}>
-                    {node.status && <span style={{ fontSize: '0.7rem', color: 'var(--color-proyecto)' }}>{node.status}</span>}
-                    <button 
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                    {node.status && <span style={{ fontSize: '0.6rem', color: chip.chipColor, alignSelf: 'center' }}>{node.status}</span>}
+                    <button
                       className="node-inspect-btn"
-                      onMouseDown={(e) => e.stopPropagation()} // Prevent drag on click
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedNode(node);
-                        setSelectedConnection(null);
-                        setIsInspectorOpen(true);
-                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setSelectedNode(node); setSelectedConnection(null); setIsInspectorOpen(true); }}
                       title="Inspeccionar propiedades"
-                    >
-                      ⚙️
-                    </button>
-                    <button 
+                      style={{ color: chip.titleColor }}
+                    >⚙️</button>
+                    <button
                       className="node-delete-btn"
-                      onMouseDown={(e) => e.stopPropagation()} // Prevent drag on click
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setNodeToDelete(node);
-                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setNodeToDelete(node); }}
                       title="Eliminar nodo"
-                    >
-                      ❌
-                    </button>
+                    >❌</button>
                   </div>
                 </div>
-                <h3>{node.label}</h3>
-                <p style={{ fontSize: '0.65rem', opacity: 0.5 }}>{getCleanLabel(node.uri)}</p>
+                <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: chip.titleColor, lineHeight: 1.25, wordBreak: 'break-word' }}>
+                  {node.label}
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.62rem', color: chip.titleColor, opacity: 0.45, lineHeight: 1.2 }}>
+                  {getCleanLabel(node.uri)}
+                </p>
               </div>
             );
           })}
