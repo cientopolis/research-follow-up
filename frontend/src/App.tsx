@@ -102,6 +102,9 @@ export default function App() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState<RDFNode | null>(null);
 
+  // Global Inference Toggle state (default false / off)
+  const [useInference, setUseInference] = useState<boolean>(false);
+
   // Inspector property editing states
   const [nodeDetails, setNodeDetails] = useState<{ [predURI: string]: string }>({});
   const [availableProperties, setAvailableProperties] = useState<string[]>([]);
@@ -210,7 +213,7 @@ SELECT ?s ?p ?o WHERE {
       const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
+        body: JSON.stringify({ query, infer: useInference })
       });
       const data = await response.json();
       
@@ -264,6 +267,18 @@ SELECT ?s ?p ?o WHERE {
       console.error("Error al cargar nodos de GraphDB", e);
     }
   };
+
+  // Re-fetch canvas data whenever inference setting is toggled
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (user) {
+      fetchGraphData();
+    }
+  }, [useInference]);
 
   const fetchAssociatedResearcher = async () => {
     if (!user) return;
@@ -406,7 +421,7 @@ SELECT ?s ?p ?o WHERE {
       const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, infer: false })
+        body: JSON.stringify({ query, infer: useInference })
       });
       const data = await response.json();
       
@@ -2126,6 +2141,68 @@ SELECT ?s ?p ?o WHERE {
             <div className="flex-row flex-space" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
               <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>⚙️ Configuración General</h2>
               <button className="btn" onClick={() => setShowConfigModal(false)}>Cerrar</button>
+            </div>
+
+            {/* Toggle: Motor de Inferencia SPARQL */}
+            <div style={{
+              background: 'var(--bg-surface)',
+              padding: '16px 20px',
+              borderRadius: '14px',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    🧠 Razonamiento e Inferencia GraphDB
+                  </span>
+                  <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                    Consultas del canvas ({`#canvasMain`}) con reglas RDFS/OWL activadas
+                  </span>
+                </div>
+
+                {/* iOS-style toggle switch */}
+                <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer', flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={useInference}
+                    onChange={(e) => {
+                      const nextVal = e.target.checked;
+                      setUseInference(nextVal);
+                    }}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: useInference ? '#16a34a' : 'var(--border-color)',
+                    transition: '0.2s', borderRadius: '26px',
+                  }}>
+                    <span style={{
+                      position: 'absolute', content: '""', height: '20px', width: '20px',
+                      left: useInference ? '24px' : '3px', bottom: '3px',
+                      backgroundColor: 'white', transition: '0.2s', borderRadius: '50%',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }} />
+                  </span>
+                </label>
+              </div>
+
+              <div style={{
+                fontSize: '0.72rem',
+                color: useInference ? '#15803d' : 'var(--text-sub)',
+                background: useInference ? 'rgba(22,163,74,0.08)' : 'rgba(0,0,0,0.03)',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                borderLeft: useInference ? '3px solid #16a34a' : '3px solid var(--border-color)',
+                lineHeight: 1.4
+              }}>
+                {useInference
+                  ? '⚡ Inferencia ACTIVADA: Retorna relaciones deducidas automáticamente por las ontologías VIVO, DBLP y CSO.'
+                  : '🔒 Inferencia DESACTIVADA (Default): Retorna únicamente las tripletas creadas explícitamente por los usuarios.'
+                }
+              </div>
             </div>
 
             {associatedResearcher ? (
