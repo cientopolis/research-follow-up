@@ -50,19 +50,22 @@ function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size:
 }
 
 export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chipColor }: NodeAvatarProps) {
-  // Generate DiceBear SVG — only for person nodes with no overrides
+  const isPersonNode = isPerson(nodeType);
+
+  // Generate DiceBear SVG — for person nodes (uses custom preset seed if provided, or default seed)
   const dicebearSvg = useMemo(() => {
-    if (!isPerson(nodeType) || photoUrl || iconName) return null;
+    if (!isPersonNode || photoUrl) return null;
+    const effectiveSeed = iconName || seed;
     try {
       return createAvatar(avataaars, {
-        seed,
+        seed: effectiveSeed,
         backgroundColor: ['transparent'],
         style: ['circle'],
       }).toString();
     } catch {
       return null;
     }
-  }, [nodeType, seed, photoUrl, iconName]);
+  }, [isPersonNode, seed, photoUrl, iconName]);
 
   const containerStyle: React.CSSProperties = {
     width: size,
@@ -87,7 +90,14 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
     );
   }
 
-  // 2. Custom Phosphor icon chosen from the picker
+  // 2. Person nodes: render DiceBear face (custom preset or auto seed)
+  if (isPersonNode && dicebearSvg) {
+    return (
+      <div style={containerStyle} dangerouslySetInnerHTML={{ __html: dicebearSvg }} />
+    );
+  }
+
+  // 3. Custom Phosphor icon chosen from picker (concept nodes)
   if (iconName) {
     const IconComp = getPhosphorIcon(iconName);
     if (IconComp) {
@@ -97,13 +107,6 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
         </div>
       );
     }
-  }
-
-  // 3. DiceBear avataaars for person nodes (no custom overrides)
-  if (dicebearSvg) {
-    return (
-      <div style={containerStyle} dangerouslySetInnerHTML={{ __html: dicebearSvg }} />
-    );
   }
 
   // 4. Default semantic Phosphor icon for concept nodes

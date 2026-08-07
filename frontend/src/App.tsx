@@ -6,6 +6,7 @@ import { auth } from './firebase';
 import { AuthScreen } from './components/AuthScreen';
 import { NodeAvatar } from './components/NodeAvatar';
 import { IconPicker } from './components/IconPicker';
+import { AvatarPicker } from './components/AvatarPicker';
 
 interface RDFNode {
   uri: string;
@@ -1629,23 +1630,49 @@ SELECT ?s ?p ?o WHERE {
                             </div>
                           )}
 
-                          {/* Tab: Icon picker */}
+                          {/* Tab: Icon / Avatar picker */}
                           {avatarTab === 'icon' && (
-                            <IconPicker
-                              selectedIcon={nodeIcons[selectedNode.uri] ?? null}
-                              onSelect={(name) => {
-                                setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
-                                // Choosing an icon clears any uploaded photo
-                                if (name) {
-                                  setNodePhotos(prev => {
-                                    const next = { ...prev };
-                                    delete next[selectedNode.uri];
-                                    return next;
-                                  });
-                                }
-                              }}
-                              chipColor="#6c6f85"
-                            />
+                            (() => {
+                              const componentId = getNodeComponentId(selectedNode.type, selectedNode.thesisType);
+                              const isPersonNode = componentId === 'nodeInvestigador' || componentId === 'nodeTesistaPosgrado' || componentId === 'nodeTesistaDeGrado';
+                              
+                              if (isPersonNode) {
+                                return (
+                                  <AvatarPicker
+                                    currentSeed={selectedNode.uri}
+                                    selectedPreset={nodeIcons[selectedNode.uri] ?? null}
+                                    onSelect={(presetSeed) => {
+                                      setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: presetSeed }));
+                                      if (presetSeed) {
+                                        setNodePhotos(prev => {
+                                          const next = { ...prev };
+                                          delete next[selectedNode.uri];
+                                          return next;
+                                        });
+                                      }
+                                    }}
+                                    chipColor="#6c6f85"
+                                  />
+                                );
+                              }
+
+                              return (
+                                <IconPicker
+                                  selectedIcon={nodeIcons[selectedNode.uri] ?? null}
+                                  onSelect={(name) => {
+                                    setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
+                                    if (name) {
+                                      setNodePhotos(prev => {
+                                        const next = { ...prev };
+                                        delete next[selectedNode.uri];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  chipColor="#6c6f85"
+                                />
+                              );
+                            })()
                           )}
                         </div>
                       </div>
