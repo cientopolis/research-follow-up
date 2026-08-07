@@ -1270,89 +1270,166 @@ SELECT ?s ?p ?o WHERE {
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#8c8fa1" />
               </marker>
             </defs>
-            {connections.map((conn) => {
-              const fromNode = nodes.find(n => n.uri === conn.from);
-              const toNode = nodes.find(n => n.uri === conn.to);
-              
-              if (!fromNode || !toNode) return null;
+            {(() => {
+              // Group connections by node pair key (unordered) to identify multi-edges
+              const pairGroups: Record<string, RDFConnection[]> = {};
+              connections.forEach(conn => {
+                const pairKey = [conn.from, conn.to].sort().join(':::');
+                if (!pairGroups[pairKey]) pairGroups[pairKey] = [];
+                pairGroups[pairKey].push(conn);
+              });
 
-              // Retrieve measured heights, fallback to 80px
-              const hFrom = nodeHeights[conn.from] || 80;
-              const hTo = nodeHeights[conn.to] || 80;
+              return connections.map((conn) => {
+                const fromNode = nodes.find(n => n.uri === conn.from);
+                const toNode = nodes.find(n => n.uri === conn.to);
+                
+                if (!fromNode || !toNode) return null;
 
-              // Node Centers
-              let cx1 = fromNode.x + 90;
-              let cy1 = fromNode.y + hFrom / 2;
-              let cx2 = toNode.x + 90;
-              let cy2 = toNode.y + hTo / 2;
-              
-              let fromHeight = hFrom;
-              let toHeight = hTo;
+                const pairKey = [conn.from, conn.to].sort().join(':::');
+                const siblingConns = pairGroups[pairKey] || [conn];
+                const multiIndex = siblingConns.findIndex(c => c.id === conn.id);
+                const totalMulti = siblingConns.length;
 
-              // Si la relación es vivo:advisor y está guardada en sentido Estudiante -> Investigador,
-              // invertimos visualmente el origen y destino para que la flecha apunte del Investigador al Estudiante.
-              if (conn.predicate === 'http://vivoweb.org/ontology/core#advisor') {
-                const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
-                const isToFaculty = toNode.type.includes('FacultyMember');
-                if (isFromStudent && isToFaculty) {
-                  cx1 = toNode.x + 90;
-                  cy1 = toNode.y + hTo / 2;
-                  cx2 = fromNode.x + 90;
-                  cy2 = fromNode.y + hFrom / 2;
-                  fromHeight = hTo;
-                  toHeight = hFrom;
+                // Retrieve measured heights, fallback to 80px
+                const hFrom = nodeHeights[conn.from] || 80;
+                const hTo = nodeHeights[conn.to] || 80;
+
+                // Node Centers
+                let cx1 = fromNode.x + 90;
+                let cy1 = fromNode.y + hFrom / 2;
+                let cx2 = toNode.x + 90;
+                let cy2 = toNode.y + hTo / 2;
+                
+                let fromHeight = hFrom;
+                let toHeight = hTo;
+
+                // Invert visually for vivo:advisor if student -> faculty
+                if (conn.predicate === 'http://vivoweb.org/ontology/core#advisor') {
+                  const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
+                  const isToFaculty = toNode.type.includes('FacultyMember');
+                  if (isFromStudent && isToFaculty) {
+                    cx1 = toNode.x + 90;
+                    cy1 = toNode.y + hTo / 2;
+                    cx2 = fromNode.x + 90;
+                    cy2 = fromNode.y + hFrom / 2;
+                    fromHeight = hTo;
+                    toHeight = hFrom;
+                  }
                 }
-              }
 
-              // Border Intersections
-              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 180, fromHeight);
-              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 180, toHeight);
+                // Border Intersections
+                const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 180, fromHeight);
+                const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 180, toHeight);
 
-              const x1 = startPt.x;
-              const y1 = startPt.y;
-              const x2 = endPt.x;
-              const y2 = endPt.y;
+                const x1 = startPt.x;
+                const y1 = startPt.y;
+                const x2 = endPt.x;
+                const y2 = endPt.y;
 
-              const mx = (x1 + x2) / 2;
-              const my = (y1 + y2) / 2;
+                // Calculate curvature offset for multi-edges
+                // Single edge: curvatureOffset = 0 (straight line)
+                // Multiple edges: alternate -45px, +45px, -85px, +85px, etc.
+                let curvatureOffset = 0;
+                if (totalMulti > 1) {
+                  const step = 42;
+                  const side = multiIndex % 2 === 0 ? 1 : -1;
+                  const magnitude = Math.floor(multiIndex / 2) + 1;
+                  curvatureOffset = side * magnitude * step;
+                }
 
-              const isSel = selectedConnection?.id === conn.id;
+                // Calculate Bézier Control Point (Q cx, cy)
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-              return (
-                <g key={conn.id}>
-                  <line
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                    className={`edge-connector-path ${isSel ? 'selected' : ''}`}
-                    markerEnd="url(#arrow)"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedConnection(conn);
-                      setEditingPredicate(conn.predicate);
-                      setSelectedNode(null);
-                      setIsInspectorOpen(true);
-                    }}
-                  />
-                  <text 
-                    x={mx} 
-                    y={my - 6} 
-                    textAnchor="middle" 
-                    className="edge-label"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedConnection(conn);
-                      setEditingPredicate(conn.predicate);
-                      setSelectedNode(null);
-                      setIsInspectorOpen(true);
-                    }}
-                  >
-                    {getCleanLabel(conn.predicate)}
-                  </text>
-                </g>
-              );
-            })}
+                // Perpendicular vector
+                const nx = -dy / dist;
+                const ny = dx / dist;
+
+                const ctrlX = midX + nx * curvatureOffset;
+                const ctrlY = midY + ny * curvatureOffset;
+
+                // Midpoint on quadratic Bézier curve at t=0.5: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
+                const labelX = 0.25 * x1 + 0.5 * ctrlX + 0.25 * x2;
+                const labelY = 0.25 * y1 + 0.5 * ctrlY + 0.25 * y2;
+
+                const isSel = selectedConnection?.id === conn.id;
+                const labelText = getCleanLabel(conn.predicate);
+                const badgeWidth = Math.max(70, labelText.length * 7 + 16);
+
+                const pathData = curvatureOffset === 0
+                  ? `M ${x1} ${y1} L ${x2} ${y2}`
+                  : `M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}`;
+
+                const handleClick = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setSelectedConnection(conn);
+                  setEditingPredicate(conn.predicate);
+                  setSelectedNode(null);
+                  setIsInspectorOpen(true);
+                };
+
+                return (
+                  <g key={conn.id} style={{ cursor: 'pointer' }}>
+                    {/* Invisible wide hit area path for easier clicking */}
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={16}
+                      onClick={handleClick}
+                    />
+
+                    {/* Visible edge line/curve */}
+                    <path
+                      d={pathData}
+                      fill="none"
+                      className={`edge-connector-path ${isSel ? 'selected' : ''}`}
+                      markerEnd="url(#arrow)"
+                      onClick={handleClick}
+                    />
+
+                    {/* Badge background + label text centered at curve midpoint */}
+                    <g transform={`translate(${labelX}, ${labelY})`} onClick={handleClick}>
+                      {/* Pill Badge Background */}
+                      <rect
+                        x={-badgeWidth / 2}
+                        y={-12}
+                        width={badgeWidth}
+                        height={22}
+                        rx={11}
+                        ry={11}
+                        fill={isSel ? '#1e66f5' : '#ffffff'}
+                        stroke={isSel ? '#1e66f5' : '#cbd5e1'}
+                        strokeWidth={1.5}
+                        style={{
+                          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
+                          transition: 'all 0.15s ease',
+                        }}
+                      />
+                      {/* Label Text */}
+                      <text
+                        x={0}
+                        y={3}
+                        textAnchor="middle"
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 600,
+                          fill: isSel ? '#ffffff' : '#334155',
+                          fontFamily: 'system-ui, -apple-system, sans-serif',
+                          userSelect: 'none',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {labelText}
+                      </text>
+                    </g>
+                  </g>
+                );
+              });
+            })()}
           </svg>
 
           {/* Cards / Nodes */}
