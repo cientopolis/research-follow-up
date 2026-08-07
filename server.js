@@ -68,7 +68,7 @@ const getGraphDBHeaders = (contentType = 'application/json') => {
 
 // Endpoint unificado Proxy SPARQL (Protegido por checkAuth)
 app.post('/api/sparql', checkAuth, async (req, res) => {
-  const { query } = req.body;
+  const { query, infer } = req.body;
   if (!query) {
     return res.status(400).json({ error: 'Falta el parámetro "query" en el cuerpo de la solicitud.' });
   }
@@ -83,12 +83,16 @@ app.post('/api/sparql', checkAuth, async (req, res) => {
       // Endpoint de actualización (statements)
       endpoint = `${GRAPHDB_URL}/repositories/${REPO}/statements`;
       headers = getGraphDBHeaders('application/x-www-form-urlencoded');
-      body = new URLSearchParams({ update: query }).toString();
+      const params = { update: query };
+      if (infer === false) params.infer = 'false';
+      body = new URLSearchParams(params).toString();
     } else {
       // Endpoint de consulta (SPARQL query)
-      endpoint = `${GRAPHDB_URL}/repositories/${REPO}`;
+      const params = { query };
+      if (infer === false) params.infer = 'false';
+      endpoint = `${GRAPHDB_URL}/repositories/${REPO}?${new URLSearchParams(params).toString()}`;
       headers = getGraphDBHeaders('application/x-www-form-urlencoded');
-      body = new URLSearchParams({ query }).toString();
+      body = new URLSearchParams(params).toString();
     }
 
     console.log(`[SPARQL Proxy] Enviando petición a GraphDB (${isUpdate ? 'UPDATE' : 'QUERY'}): ${endpoint}`);

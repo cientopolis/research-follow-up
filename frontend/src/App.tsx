@@ -406,7 +406,7 @@ SELECT ?s ?p ?o WHERE {
       const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
+        body: JSON.stringify({ query, infer: false })
       });
       const data = await response.json();
       
