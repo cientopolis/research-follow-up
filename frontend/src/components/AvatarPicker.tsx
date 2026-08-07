@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createAvatar } from '@dicebear/core';
 import { avataaars } from '@dicebear/collection';
 import { AVATAR_PRESETS } from './avatarPresets';
@@ -78,6 +78,8 @@ function PresetTile({
 }
 
 export function AvatarPicker({ currentSeed, selectedPreset, onSelect, chipColor = '#6c6f85' }: AvatarPickerProps) {
+  const [search, setSearch] = useState('');
+
   // "Auto" tile — renders the avatar derived from the node's own URI
   const autoSvg = useMemo(() => {
     try {
@@ -91,17 +93,38 @@ export function AvatarPicker({ currentSeed, selectedPreset, onSelect, chipColor 
     }
   }, [currentSeed]);
 
+  const filteredPresets = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return AVATAR_PRESETS;
+    return AVATAR_PRESETS.filter(p =>
+      p.label.toLowerCase().includes(q) || p.seed.toLowerCase().includes(q)
+    );
+  }, [search]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        Elegí un avatar — o usá el generado automáticamente a partir del nombre del nodo.
-      </span>
+      <input
+        type="text"
+        placeholder="Buscar estilo o nombre de avatar..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{
+          width: '100%',
+          padding: '7px 10px',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)',
+          background: 'var(--bg-surface)',
+          color: 'var(--text-main)',
+          fontSize: '0.82rem',
+          boxSizing: 'border-box',
+        }}
+      />
 
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(66px, 1fr))',
         gap: '6px',
-        maxHeight: '240px',
+        maxHeight: '250px',
         overflowY: 'auto',
         padding: '4px 2px',
       }}>
@@ -143,7 +166,7 @@ export function AvatarPicker({ currentSeed, selectedPreset, onSelect, chipColor 
         </button>
 
         {/* Preset tiles */}
-        {AVATAR_PRESETS.map(preset => (
+        {filteredPresets.map(preset => (
           <PresetTile
             key={preset.seed}
             seed={preset.seed}
@@ -153,6 +176,18 @@ export function AvatarPicker({ currentSeed, selectedPreset, onSelect, chipColor 
             chipColor={chipColor}
           />
         ))}
+
+        {filteredPresets.length === 0 && (
+          <div style={{
+            gridColumn: '1 / -1',
+            textAlign: 'center',
+            padding: '20px',
+            color: 'var(--text-muted)',
+            fontSize: '0.8rem',
+          }}>
+            No se encontraron avatares para "{search}"
+          </div>
+        )}
       </div>
     </div>
   );
