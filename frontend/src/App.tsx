@@ -1174,9 +1174,9 @@ SELECT ?s ?p ?o WHERE {
               const hTo = nodeHeights[conn.to] || 80;
 
               // Node Centers
-              let cx1 = fromNode.x + 110;
+              let cx1 = fromNode.x + 90;
               let cy1 = fromNode.y + hFrom / 2;
-              let cx2 = toNode.x + 110;
+              let cx2 = toNode.x + 90;
               let cy2 = toNode.y + hTo / 2;
               
               let fromHeight = hFrom;
@@ -1188,9 +1188,9 @@ SELECT ?s ?p ?o WHERE {
                 const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
                 const isToFaculty = toNode.type.includes('FacultyMember');
                 if (isFromStudent && isToFaculty) {
-                  cx1 = toNode.x + 110;
+                  cx1 = toNode.x + 90;
                   cy1 = toNode.y + hTo / 2;
-                  cx2 = fromNode.x + 110;
+                  cx2 = fromNode.x + 90;
                   cy2 = fromNode.y + hFrom / 2;
                   fromHeight = hTo;
                   toHeight = hFrom;
@@ -1198,8 +1198,8 @@ SELECT ?s ?p ?o WHERE {
               }
 
               // Border Intersections
-              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 220, fromHeight);
-              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 220, toHeight);
+              const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 180, fromHeight);
+              const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 180, toHeight);
 
               const x1 = startPt.x;
               const y1 = startPt.y;

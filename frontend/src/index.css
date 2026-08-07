@@ -99,57 +99,59 @@ body, html, #root {
 /* Nodes Styling */
 .node-card {
   position: absolute;
-  padding: 16px 20px;
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background: var(--bg-surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-color);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
-  width: 220px;
-  min-height: 80px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  width: 180px;
+  min-height: 70px;
   cursor: move;
   z-index: 10;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  box-sizing: border-box;
 }
 
 .node-card:hover {
   border-color: var(--border-active);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 
 .node-card.selected {
   border-color: var(--border-focus) !important;
-  box-shadow: 0 0 15px rgba(249, 226, 175, 0.3) !important;
+  box-shadow: 0 0 12px rgba(249, 226, 175, 0.25) !important;
 }
 
 .node-card h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-main);
   word-break: break-word;
+  line-height: 1.2;
 }
 
 .node-card p {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: var(--text-sub);
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .node-card .node-tag {
   display: inline-block;
   align-self: flex-start;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 20px;
-  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
 }
 
 /* Semantic Node Specializations */
