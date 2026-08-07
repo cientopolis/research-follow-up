@@ -4,9 +4,39 @@ import { SYSTEM_ICONS, ICON_CATEGORIES } from './systemIcons';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 
 interface IconPickerProps {
+  nodeType?: string; // e.g. 'nodeProyecto', 'nodePaper', 'nodeTesisDoctoral', etc.
   selectedIcon: string | null;
   onSelect: (iconName: string | null) => void;
   chipColor?: string;
+}
+
+/** Map node types to suggested category */
+function getDefaultCategory(nodeType?: string): string {
+  switch (nodeType) {
+    case 'nodeProyecto':       return 'Proyectos';
+    case 'nodePaper':          return 'Publicaciones';
+    case 'nodeTesisDoctoral':
+    case 'nodeTesisMaestria':  return 'Académico';
+    case 'nodeTopicCSO':       return 'Tópicos';
+    default:                   return 'Sugeridos';
+  }
+}
+
+/** Map node types to specific recommended icon names */
+function getSuggestedIconNames(nodeType?: string): string[] {
+  switch (nodeType) {
+    case 'nodeProyecto':
+      return ['Briefcase', 'FolderOpen', 'Rocket', 'Target', 'Flag', 'Gear', 'Buildings', 'TreeStructure', 'Kanban', 'Graph'];
+    case 'nodePaper':
+      return ['FileText', 'Article', 'NewspaperClipping', 'FilePdf', 'Quotes', 'ReadCvLogo', 'BookOpen', 'Notebook', 'Scroll'];
+    case 'nodeTesisDoctoral':
+    case 'nodeTesisMaestria':
+      return ['GraduationCap', 'Medal', 'Certificate', 'Scroll', 'Trophy', 'Books', 'BookBookmark', 'PenNib'];
+    case 'nodeTopicCSO':
+      return ['Tag', 'Hash', 'PuzzlePiece', 'LinkSimple', 'Intersect', 'Network', 'Hexagon', 'Diamond', 'Brain', 'Atom'];
+    default:
+      return ['Briefcase', 'FileText', 'GraduationCap', 'Tag', 'Brain', 'Rocket', 'FolderOpen', 'Atom'];
+  }
 }
 
 /** Resolve a Phosphor icon component by name string */
@@ -15,20 +45,34 @@ function getPhosphorIcon(name: string): PhosphorIcon | null {
   return icon ? (icon as PhosphorIcon) : null;
 }
 
-export function IconPicker({ selectedIcon, onSelect, chipColor = '#6c6f85' }: IconPickerProps) {
+export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6f85' }: IconPickerProps) {
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  
+  // Set default category according to nodeType, defaulting to 'Sugeridos'
+  const initialCategory = useMemo(() => getDefaultCategory(nodeType), [nodeType]);
+  const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
+
+  const suggestedNames = useMemo(() => getSuggestedIconNames(nodeType), [nodeType]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return SYSTEM_ICONS.filter(icon => {
       const matchesSearch = !q || icon.label.toLowerCase().includes(q) || icon.name.toLowerCase().includes(q);
-      const matchesCat = activeCategory === 'Todos' || icon.category === activeCategory;
+      
+      let matchesCat = false;
+      if (activeCategory === 'Todos') {
+        matchesCat = true;
+      } else if (activeCategory === 'Sugeridos') {
+        matchesCat = suggestedNames.includes(icon.name);
+      } else {
+        matchesCat = icon.category === activeCategory;
+      }
+
       return matchesSearch && matchesCat;
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, suggestedNames]);
 
-  const categories = ['Todos', ...ICON_CATEGORIES];
+  const categories = ['Sugeridos', 'Todos', ...ICON_CATEGORIES];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -68,7 +112,7 @@ export function IconPicker({ selectedIcon, onSelect, chipColor = '#6c6f85' }: Ic
               transition: 'all 0.15s',
             }}
           >
-            {cat}
+            {cat === 'Sugeridos' ? '★ Sugeridos' : cat}
           </button>
         ))}
       </div>
@@ -84,9 +128,9 @@ export function IconPicker({ selectedIcon, onSelect, chipColor = '#6c6f85' }: Ic
           padding: '4px 2px',
         }}
       >
-        {/* "Sin ícono" tile — restores automatic avatar */}
+        {/* "Sin ícono" tile — restores automatic default icon */}
         <button
-          title="Automático (avatar generado)"
+          title="Automático (por defecto del tipo de nodo)"
           onClick={() => onSelect(null)}
           style={{
             display: 'flex',

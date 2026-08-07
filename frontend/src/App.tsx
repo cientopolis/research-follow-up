@@ -1658,6 +1658,7 @@ SELECT ?s ?p ?o WHERE {
 
                               return (
                                 <IconPicker
+                                  nodeType={componentId}
                                   selectedIcon={nodeIcons[selectedNode.uri] ?? null}
                                   onSelect={(name) => {
                                     setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
