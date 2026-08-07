@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from './firebase';
 import { AuthScreen } from './components/AuthScreen';
+import { NodeAvatar } from './components/NodeAvatar';
 
 interface RDFNode {
   uri: string;
@@ -13,6 +14,7 @@ interface RDFNode {
   y: number;
   status?: string;
   thesisType?: string;
+  photoUrl?: string;
 }
 
 interface RDFConnection {
@@ -107,6 +109,19 @@ export default function App() {
   const [newPropVal, setNewPropVal] = useState('');
   const [isAddingCustomProp, setIsAddingCustomProp] = useState(false);
 
+  // Node photos — stored as data URLs keyed by node URI
+  const [nodePhotos, setNodePhotos] = useState<{ [uri: string]: string }>({});
+
+  const handlePhotoUpload = useCallback((nodeUri: string, file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setNodePhotos(prev => ({ ...prev, [nodeUri]: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   // Dynamic Node Card Heights tracking
   const [nodeHeights, setNodeHeights] = useState<{ [uri: string]: number }>({});
   const nodeRef = useCallback((el: HTMLDivElement | null, uri: string) => {
@@ -140,6 +155,10 @@ export default function App() {
   const [pendingConnectionTarget, setPendingConnectionTarget] = useState<string | null>(null);
   const [showRelationModal, setShowRelationModal] = useState(false);
   const [selectedRelationPredicate, setSelectedRelationPredicate] = useState('http://vivoweb.org/ontology/core#relatedBy');
+
+  // Connection predicate editing
+  const [editingPredicate, setEditingPredicate] = useState<string>('');
+  const [isSavingPredicate, setIsSavingPredicate] = useState(false);
 
   // SPARQL console
   const [sparqlQuery, setSparqlQuery] = useState(`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -898,6 +917,38 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
+  // Save (update) the predicate of an existing connection
+  const saveConnectionPredicate = async () => {
+    if (!selectedConnection || !editingPredicate || editingPredicate === selectedConnection.predicate) return;
+    setIsSavingPredicate(true);
+    const updateQuery = `
+      DELETE DATA {
+        <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
+      };
+      INSERT DATA {
+        <${selectedConnection.from}> <${editingPredicate}> <${selectedConnection.to}> .
+      }
+    `;
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: updateQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedConnection(null);
+        setIsInspectorOpen(false);
+        setEditingPredicate('');
+        await fetchGraphData();
+      }
+    } catch (e) {
+      console.error('Error al actualizar predicado', e);
+    } finally {
+      setIsSavingPredicate(false);
+    }
+  };
+
   // Create Connection
   const createConnection = async (sourceURI: string, targetURI: string) => {
     const sourceNode = nodes.find(n => n.uri === sourceURI);
@@ -1271,6 +1322,7 @@ SELECT ?s ?p ?o WHERE {
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedConnection(conn);
+                      setEditingPredicate(conn.predicate);
                       setSelectedNode(null);
                       setIsInspectorOpen(true);
                     }}
@@ -1283,6 +1335,7 @@ SELECT ?s ?p ?o WHERE {
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedConnection(conn);
+                      setEditingPredicate(conn.predicate);
                       setSelectedNode(null);
                       setIsInspectorOpen(true);
                     }}
@@ -1375,30 +1428,14 @@ SELECT ?s ?p ?o WHERE {
                 >+</button>
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Color chip icon */}
-                  <span style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    background: chip.chipColor,
-                    flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.8rem',
-                    color: '#fff',
-                    boxShadow: `0 2px 6px ${chip.chipColor}55`,
-                  }}>
-                    {nodeDomId === 'nodeInvestigador' ? '👤'
-                      : nodeDomId === 'nodeTesistaPosgrado' ? '🎓'
-                      : nodeDomId === 'nodeTesistaDeGrado' ? '📚'
-                      : nodeDomId === 'nodeProyecto' ? '🔬'
-                      : nodeDomId === 'nodePaper' ? '📄'
-                      : nodeDomId === 'nodeTesisDoctoral' ? '🏅'
-                      : nodeDomId === 'nodeTesisMaestria' ? '🎖️'
-                      : nodeDomId === 'nodeTopicCSO' ? '🏷️'
-                      : '🔷'}
-                  </span>
+                  {/* Avatar / Icon */}
+                  <NodeAvatar
+                    nodeType={nodeDomId}
+                    seed={node.uri}
+                    photoUrl={nodePhotos[node.uri]}
+                    size={40}
+                    chipColor={chip.chipColor}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                       <span style={{
@@ -1488,6 +1525,69 @@ SELECT ?s ?p ?o WHERE {
                           {validationErrors['http://www.w3.org/2000/01/rdf-schema#label'] && (
                             <span className="error-message">{validationErrors['http://www.w3.org/2000/01/rdf-schema#label']}</span>
                           )}
+                        </div>
+
+                        {/* Photo / Avatar upload */}
+                        <div className="form-group">
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            🖼️ Foto / Avatar del nodo
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {/* Preview */}
+                            <div style={{ flexShrink: 0 }}>
+                              <NodeAvatar
+                                nodeType={getNodeComponentId(selectedNode.type, selectedNode.thesisType)}
+                                seed={selectedNode.uri}
+                                photoUrl={nodePhotos[selectedNode.uri]}
+                                size={56}
+                                chipColor="#6c6f85"
+                              />
+                            </div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label
+                                id="photoUploadLabel"
+                                htmlFor="photoUploadInput"
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                  cursor: 'pointer', padding: '7px 14px',
+                                  background: 'var(--bg-surface)', border: '1px dashed var(--border-color)',
+                                  borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-main)',
+                                  transition: 'background 0.15s',
+                                }}
+                              >
+                                📁 Elegir foto…
+                              </label>
+                              <input
+                                id="photoUploadInput"
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePhotoUpload(selectedNode.uri, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                              {nodePhotos[selectedNode.uri] && (
+                                <button
+                                  className="btn"
+                                  style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#d20f39' }}
+                                  onClick={() => setNodePhotos(prev => {
+                                    const next = { ...prev };
+                                    delete next[selectedNode.uri];
+                                    return next;
+                                  })}
+                                >
+                                  ✕ Quitar foto
+                                </button>
+                              )}
+                              {!nodePhotos[selectedNode.uri] && (
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                  Se mostrará el avatar generado automáticamente
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1652,15 +1752,69 @@ SELECT ?s ?p ?o WHERE {
                 <>
                   <div className="form-group">
                     <label>Sujeto (Origen)</label>
-                    <input type="text" value={getCleanLabel(selectedConnection.from)} readOnly />
+                    <input type="text" value={getCleanLabel(selectedConnection.from)} readOnly style={{ cursor: 'default', opacity: 0.75 }} />
                   </div>
+
                   <div className="form-group">
-                    <label>Predicado (Relación)</label>
-                    <input type="text" value={getCleanLabel(selectedConnection.predicate)} readOnly />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      ✏️ Predicado (Relación)
+                      <span style={{ fontSize: '0.65rem', fontWeight: 400, background: 'rgba(var(--accent-rgb, 30,102,245),0.12)', color: 'var(--color-investigador, #1e3a8a)', padding: '1px 6px', borderRadius: '4px' }}>editable</span>
+                    </label>
+                    <select
+                      id="connectionPredicateSelect"
+                      value={editingPredicate}
+                      onChange={(e) => setEditingPredicate(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${editingPredicate !== selectedConnection.predicate ? '#1e66f5' : 'var(--border-color)'}`, background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.85rem', transition: 'border-color 0.2s' }}
+                    >
+                      <optgroup label="VIVO (académico)">
+                        <option value="http://vivoweb.org/ontology/core#advisor">vivo:advisor — Director de tesis</option>
+                        <option value="http://vivoweb.org/ontology/core#hasMember">vivo:hasMember — Miembro de proyecto</option>
+                        <option value="http://vivoweb.org/ontology/core#relatedBy">vivo:relatedBy — Relación genérica</option>
+                        <option value="http://vivoweb.org/ontology/core#supportedInformationResource">vivo:supportedInformationResource — Produce paper</option>
+                        <option value="http://vivoweb.org/ontology/core#hasCollaborator">vivo:hasCollaborator — Colabora con</option>
+                        <option value="http://vivoweb.org/ontology/core#contributorTo">vivo:contributorTo — Contribuye a</option>
+                      </optgroup>
+                      <optgroup label="DBLP / Bibliográfico">
+                        <option value="https://dblp.org/rdf/schema#authoredBy">dblp:authoredBy — Autoría de paper</option>
+                        <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado en</option>
+                      </optgroup>
+                      <optgroup label="Dublin Core">
+                        <option value="http://purl.org/dc/terms/subject">dct:subject — Trata sobre tema</option>
+                        <option value="http://purl.org/dc/terms/isPartOf">dct:isPartOf — Es parte de</option>
+                      </optgroup>
+                      <optgroup label="RFU (proyecto)">
+                        <option value="http://cientopolis.org/rfu/collaboratesWith">rfu:collaboratesWith — Colabora con</option>
+                        <option value="http://cientopolis.org/rfu/supervises">rfu:supervises — Supervisa</option>
+                        <option value="http://cientopolis.org/rfu/partOf">rfu:partOf — Parte de</option>
+                        <option value="http://cientopolis.org/rfu/researchedIn">rfu:researchedIn — Investigado en</option>
+                      </optgroup>
+                      <optgroup label="Genérico">
+                        <option value="http://example.org/resource/relatedTo">ex:relatedTo — Relacionado con</option>
+                      </optgroup>
+                    </select>
+                    {editingPredicate !== selectedConnection.predicate && (
+                      <span style={{ fontSize: '0.7rem', color: '#1e66f5', marginTop: '4px', display: 'block' }}>
+                        ⚠️ Predicado cambiado — guardá para aplicar el cambio en GraphDB.
+                      </span>
+                    )}
                   </div>
+
                   <div className="form-group">
                     <label>Objeto (Destino)</label>
-                    <input type="text" value={getCleanLabel(selectedConnection.to)} readOnly />
+                    <input type="text" value={getCleanLabel(selectedConnection.to)} readOnly style={{ cursor: 'default', opacity: 0.75 }} />
+                  </div>
+
+                  <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                    <button className="btn" onClick={() => { setSelectedConnection(null); setIsInspectorOpen(false); setEditingPredicate(''); }}>Cancelar</button>
+                    <button
+                      id="btnGuardarPredicado"
+                      className="btn btn-primary"
+                      onClick={saveConnectionPredicate}
+                      disabled={isSavingPredicate || editingPredicate === selectedConnection.predicate}
+                      style={{ opacity: (isSavingPredicate || editingPredicate === selectedConnection.predicate) ? 0.55 : 1, transition: 'opacity 0.2s' }}
+                    >
+                      {isSavingPredicate ? '⏳ Guardando...' : '💾 Guardar Predicado'}
+                    </button>
                   </div>
                 </>
               )}
