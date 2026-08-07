@@ -1257,8 +1257,8 @@ SELECT ?s ?p ?o WHERE {
               <div
                 key={node.uri}
                 ref={(el) => nodeRef(el, node.uri)}
-                id={nodeDomId}
-                className={`node-card ${isSelected ? 'selected' : ''}`}
+                id={node.uri}
+                className={`node-card ${nodeDomId} ${isSelected ? 'selected' : ''}`}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px)`,
                   border: isConnectSrc 
