@@ -6,9 +6,22 @@ import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 interface IconPickerProps {
   nodeType?: string; // e.g. 'nodeProyecto', 'nodePaper', 'nodeTesisDoctoral', etc.
   selectedIcon: string | null;
-  onSelect: (iconName: string | null) => void;
+  selectedBgColor?: string | null;
+  onSelect: (iconName: string | null, bgColor?: string | null) => void;
   chipColor?: string;
 }
+
+export const ICON_BG_COLORS = [
+  { name: 'Default (Chip)', value: null },
+  { name: 'Menta',          value: '#e6f9f0', iconColor: '#0d9488' },
+  { name: 'Cielo',          value: '#e0f2fe', iconColor: '#0284c7' },
+  { name: 'Índigo',         value: '#e0e7ff', iconColor: '#4f46e5' },
+  { name: 'Lavanda',        value: '#f3e8ff', iconColor: '#9333ea' },
+  { name: 'Rosa',           value: '#ffe4e6', iconColor: '#e11d48' },
+  { name: 'Naranja',        value: '#ffedd5', iconColor: '#ea580c' },
+  { name: 'Ámbar',          value: '#fef3c7', iconColor: '#d97706' },
+  { name: 'Grafito',        value: '#f1f5f9', iconColor: '#475569' },
+];
 
 /** Map node types to suggested category */
 function getDefaultCategory(nodeType?: string): string {
@@ -45,12 +58,12 @@ function getPhosphorIcon(name: string): PhosphorIcon | null {
   return icon ? (icon as PhosphorIcon) : null;
 }
 
-export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6f85' }: IconPickerProps) {
+export function IconPicker({ nodeType, selectedIcon, selectedBgColor, onSelect, chipColor = '#6c6f85' }: IconPickerProps) {
   const [search, setSearch] = useState('');
   
-  // Set default category according to nodeType, defaulting to 'Sugeridos'
   const initialCategory = useMemo(() => getDefaultCategory(nodeType), [nodeType]);
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
+  const [currentColor, setCurrentColor] = useState<string | null>(selectedBgColor || null);
 
   const suggestedNames = useMemo(() => getSuggestedIconNames(nodeType), [nodeType]);
 
@@ -74,8 +87,59 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
 
   const categories = ['Sugeridos', 'Todos', ...ICON_CATEGORIES];
 
+  const activeColorObj = ICON_BG_COLORS.find(c => c.value === currentColor);
+  const activeIconColor = activeColorObj?.iconColor || '#fff';
+  const activeBgColor = activeColorObj?.value || chipColor;
+
+  const handleSelectIcon = (iconName: string | null) => {
+    onSelect(iconName, currentColor);
+  };
+
+  const handleSelectColor = (colorValue: string | null) => {
+    setCurrentColor(colorValue);
+    onSelect(selectedIcon, colorValue);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Background Color Palette Selector */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+          Color de fondo / ilustración:
+        </span>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {ICON_BG_COLORS.map(col => {
+            const isSelected = currentColor === col.value;
+            const bg = col.value || chipColor;
+            return (
+              <button
+                key={col.name}
+                title={col.name}
+                onClick={() => handleSelectColor(col.value)}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  background: bg,
+                  border: isSelected ? '2px solid var(--text-main)' : '1px solid rgba(0,0,0,0.15)',
+                  cursor: 'pointer',
+                  boxShadow: isSelected ? '0 0 0 2px rgba(0,0,0,0.2)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'transform 0.15s',
+                  transform: isSelected ? 'scale(1.15)' : 'scale(1)',
+                }}
+              >
+                {col.iconColor && (
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: col.iconColor }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Search */}
       <input
         type="text"
@@ -121,9 +185,9 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(54px, 1fr))',
           gap: '6px',
-          maxHeight: '200px',
+          maxHeight: '180px',
           overflowY: 'auto',
           padding: '4px 2px',
         }}
@@ -131,7 +195,7 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
         {/* "Sin ícono" tile — restores automatic default icon */}
         <button
           title="Automático (por defecto del tipo de nodo)"
-          onClick={() => onSelect(null)}
+          onClick={() => handleSelectIcon(null)}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -139,7 +203,7 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
             justifyContent: 'center',
             gap: '3px',
             padding: '6px 4px',
-            borderRadius: '8px',
+            borderRadius: '10px',
             border: selectedIcon === null ? `2px solid ${chipColor}` : '1.5px solid var(--border-color)',
             background: selectedIcon === null ? `${chipColor}18` : 'var(--bg-surface)',
             cursor: 'pointer',
@@ -158,7 +222,7 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
             <button
               key={icon.name}
               title={icon.label}
-              onClick={() => onSelect(icon.name)}
+              onClick={() => handleSelectIcon(icon.name)}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -166,28 +230,29 @@ export function IconPicker({ nodeType, selectedIcon, onSelect, chipColor = '#6c6
                 justifyContent: 'center',
                 gap: '3px',
                 padding: '6px 4px',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: isSelected ? `2px solid ${chipColor}` : '1.5px solid var(--border-color)',
-                background: isSelected ? `${chipColor}18` : 'var(--bg-surface)',
+                background: isSelected ? activeBgColor : 'var(--bg-surface)',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
             >
               <IconComp
-                size={20}
-                weight={isSelected ? 'fill' : 'regular'}
-                color={isSelected ? chipColor : 'var(--text-muted)'}
+                size={22}
+                weight={isSelected ? 'fill' : 'duotone'}
+                color={isSelected ? activeIconColor : (activeBgColor !== chipColor && isSelected ? activeIconColor : chipColor)}
               />
               <span
                 style={{
                   fontSize: '0.52rem',
-                  color: isSelected ? chipColor : 'var(--text-muted)',
+                  color: isSelected ? (activeBgColor === chipColor ? '#fff' : activeIconColor) : 'var(--text-muted)',
                   lineHeight: 1.2,
                   textAlign: 'center',
                   maxWidth: '48px',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  fontWeight: isSelected ? 600 : 400,
                 }}
               >
                 {icon.label}

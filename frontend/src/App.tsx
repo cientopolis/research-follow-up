@@ -115,6 +115,8 @@ export default function App() {
   const [nodePhotos, setNodePhotos] = useState<{ [uri: string]: string }>({});
   // Node custom icons — Phosphor icon name keyed by node URI (null = use automatic avatar)
   const [nodeIcons, setNodeIcons] = useState<{ [uri: string]: string | null }>({});
+  // Node custom icon background colors
+  const [nodeIconBgs, setNodeIconBgs] = useState<{ [uri: string]: string | null }>({});
   // Tab state for the avatar editor in the inspector
   const [avatarTab, setAvatarTab] = useState<'photo' | 'icon'>('photo');
 
@@ -1440,6 +1442,7 @@ SELECT ?s ?p ?o WHERE {
                     seed={node.uri}
                     photoUrl={nodePhotos[node.uri]}
                     iconName={nodeIcons[node.uri]}
+                    iconBgColor={nodeIconBgs[node.uri]}
                     size={40}
                     chipColor={chip.chipColor}
                   />
@@ -1548,6 +1551,7 @@ SELECT ?s ?p ?o WHERE {
                                 seed={selectedNode.uri}
                                 photoUrl={nodePhotos[selectedNode.uri]}
                                 iconName={nodeIcons[selectedNode.uri]}
+                                iconBgColor={nodeIconBgs[selectedNode.uri]}
                                 size={60}
                                 chipColor="#6c6f85"
                               />
@@ -1660,8 +1664,10 @@ SELECT ?s ?p ?o WHERE {
                                 <IconPicker
                                   nodeType={componentId}
                                   selectedIcon={nodeIcons[selectedNode.uri] ?? null}
-                                  onSelect={(name) => {
+                                  selectedBgColor={nodeIconBgs[selectedNode.uri] ?? null}
+                                  onSelect={(name, bgColor) => {
                                     setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
+                                    setNodeIconBgs(prev => ({ ...prev, [selectedNode.uri]: bgColor || null }));
                                     if (name) {
                                       setNodePhotos(prev => {
                                         const next = { ...prev };

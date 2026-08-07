@@ -13,13 +13,26 @@ import {
 } from '@phosphor-icons/react';
 
 export interface NodeAvatarProps {
-  nodeType: string;      // e.g. 'nodeInvestigador', 'nodePaper', …
-  seed: string;          // URI or label — used for deterministic DiceBear generation
-  photoUrl?: string;     // Optional user-uploaded photo (data URL or remote URL)
-  iconName?: string | null; // Optional Phosphor icon name chosen from the picker
-  size?: number;         // px — default 40
-  chipColor: string;     // Accent colour from the card palette
+  nodeType: string;         // e.g. 'nodeInvestigador', 'nodePaper', …
+  seed: string;             // URI or label — used for deterministic DiceBear generation
+  photoUrl?: string;        // Optional user-uploaded photo (data URL or remote URL)
+  iconName?: string | null;    // Optional Phosphor icon name chosen from the picker
+  iconBgColor?: string | null; // Optional custom background color for the icon avatar
+  size?: number;            // px — default 40
+  chipColor: string;        // Accent colour from the card palette
 }
+
+/** Color palette map to get matching icon contrast color */
+const ICON_COLOR_MAP: Record<string, string> = {
+  '#e6f9f0': '#0d9488',
+  '#e0f2fe': '#0284c7',
+  '#e0e7ff': '#4f46e5',
+  '#f3e8ff': '#9333ea',
+  '#ffe4e6': '#e11d48',
+  '#ffedd5': '#ea580c',
+  '#fef3c7': '#d97706',
+  '#f1f5f9': '#475569',
+};
 
 /** Returns true for node types that represent people */
 function isPerson(nodeType: string) {
@@ -38,7 +51,7 @@ function getPhosphorIcon(name: string): PhosphorIcon | null {
 
 /** Default Phosphor icon per concept node type (duotone) */
 function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size: number; color: string }) {
-  const props = { size: Math.round(size * 0.6), color, weight: 'duotone' as const };
+  const props = { size: Math.round(size * 0.58), color, weight: 'duotone' as const };
   switch (nodeType) {
     case 'nodeProyecto':       return <Briefcase   {...props} />;
     case 'nodePaper':          return <FileText     {...props} />;
@@ -49,7 +62,7 @@ function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size:
   }
 }
 
-export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chipColor }: NodeAvatarProps) {
+export function NodeAvatar({ nodeType, seed, photoUrl, iconName, iconBgColor, size = 40, chipColor }: NodeAvatarProps) {
   const isPersonNode = isPerson(nodeType);
 
   // Generate DiceBear SVG — for person nodes (uses custom preset seed if provided, or default seed)
@@ -67,6 +80,9 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
     }
   }, [isPersonNode, seed, photoUrl, iconName]);
 
+  const effectiveBg = iconBgColor || (photoUrl || dicebearSvg ? 'transparent' : chipColor);
+  const iconColor = iconBgColor && ICON_COLOR_MAP[iconBgColor] ? ICON_COLOR_MAP[iconBgColor] : '#fff';
+
   const containerStyle: React.CSSProperties = {
     width: size,
     height: size,
@@ -76,8 +92,8 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: photoUrl || dicebearSvg ? 'transparent' : chipColor,
-    boxShadow: `0 2px 6px ${chipColor}55`,
+    background: effectiveBg,
+    boxShadow: `0 2px 6px ${iconBgColor || chipColor}44`,
     border: photoUrl ? `2px solid ${chipColor}` : 'none',
   };
 
@@ -103,7 +119,7 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
     if (IconComp) {
       return (
         <div style={containerStyle}>
-          <IconComp size={Math.round(size * 0.58)} color="#fff" weight="duotone" />
+          <IconComp size={Math.round(size * 0.58)} color={iconColor} weight="duotone" />
         </div>
       );
     }
@@ -112,7 +128,7 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, size = 40, chip
   // 4. Default semantic Phosphor icon for concept nodes
   return (
     <div style={containerStyle}>
-      <DefaultConceptIcon nodeType={nodeType} size={size} color="#fff" />
+      <DefaultConceptIcon nodeType={nodeType} size={size} color={iconColor} />
     </div>
   );
 }
