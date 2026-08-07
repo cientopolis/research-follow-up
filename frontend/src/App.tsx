@@ -135,6 +135,12 @@ export default function App() {
   const [showNewNodeModal, setShowNewNodeModal] = useState(false);
   const [newNodeData, setNewNodeData] = useState({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '' });
 
+  // Quick-connect flow: "+" button on node edge
+  const [quickConnectSourceUri, setQuickConnectSourceUri] = useState<string | null>(null);
+  const [pendingConnectionTarget, setPendingConnectionTarget] = useState<string | null>(null);
+  const [showRelationModal, setShowRelationModal] = useState(false);
+  const [selectedRelationPredicate, setSelectedRelationPredicate] = useState('http://vivoweb.org/ontology/core#relatedBy');
+
   // SPARQL console
   const [sparqlQuery, setSparqlQuery] = useState(`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -776,8 +782,18 @@ SELECT ?s ?p ?o WHERE {
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     
     const uri = `http://example.org/resource/${newNodeData.uriSuffix.trim()}`;
-    const x = Math.round((-pan.x + window.innerWidth / 2) / zoom);
-    const y = Math.round((-pan.y + window.innerHeight / 2) / zoom);
+
+    // If triggered via quick-connect, place child node offset from parent
+    let x: number;
+    let y: number;
+    if (quickConnectSourceUri) {
+      const srcNode = nodes.find(n => n.uri === quickConnectSourceUri);
+      x = srcNode ? srcNode.x + 210 : Math.round((-pan.x + window.innerWidth / 2) / zoom);
+      y = srcNode ? srcNode.y : Math.round((-pan.y + window.innerHeight / 2) / zoom);
+    } else {
+      x = Math.round((-pan.x + window.innerWidth / 2) / zoom);
+      y = Math.round((-pan.y + window.innerHeight / 2) / zoom);
+    }
 
     let finalType = newNodeData.type;
     let extraTriples = '';
@@ -815,10 +831,42 @@ SELECT ?s ?p ?o WHERE {
       if (data.success) {
         setShowNewNodeModal(false);
         setNewNodeData({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '' });
-        fetchGraphData();
+        await fetchGraphData();
+        // If this was a quick-connect action, open relation picker
+        if (quickConnectSourceUri) {
+          setPendingConnectionTarget(uri);
+          setSelectedRelationPredicate('http://vivoweb.org/ontology/core#relatedBy');
+          setShowRelationModal(true);
+        }
       }
     } catch (e) {
       console.error("Error creando nodo", e);
+    }
+  };
+
+  // Create RDF relation triple between two nodes
+  const createRelation = async () => {
+    if (!quickConnectSourceUri || !pendingConnectionTarget || !selectedRelationPredicate) return;
+    const insertQuery = `
+      INSERT DATA {
+        <${quickConnectSourceUri}> <${selectedRelationPredicate}> <${pendingConnectionTarget}> .
+      }
+    `;
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: insertQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowRelationModal(false);
+        setQuickConnectSourceUri(null);
+        setPendingConnectionTarget(null);
+        fetchGraphData();
+      }
+    } catch (e) {
+      console.error("Error creando relación", e);
     }
   };
 
@@ -1291,6 +1339,40 @@ SELECT ?s ?p ?o WHERE {
                 }}
                 onMouseDown={(e) => startDragNode(e, node)}
               >
+                {/* Quick-connect "+" button on right edge */}
+                <button
+                  title="Crear y conectar nuevo nodo"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuickConnectSourceUri(node.uri);
+                    setShowNewNodeModal(true);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '-14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '50%',
+                    background: chip.chipColor,
+                    color: '#fff',
+                    border: '2px solid #fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    boxShadow: `0 2px 8px ${chip.chipColor}66`,
+                    zIndex: 20,
+                    opacity: 0,
+                    transition: 'opacity 0.15s ease, transform 0.15s ease',
+                  }}
+                  className="node-quick-connect-btn"
+                >+</button>
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {/* Color chip icon */}
@@ -1620,6 +1702,80 @@ SELECT ?s ?p ?o WHERE {
             <div className="flex-row flex-space" style={{ marginTop: '10px' }}>
               <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
               <button className="btn btn-primary" onClick={createNode}>Crear Nodo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Selector de relación (quick-connect) */}
+      {showRelationModal && quickConnectSourceUri && pendingConnectionTarget && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', justifyContent: 'center',
+          alignItems: 'center', zIndex: 600, backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--bg-mantle)', padding: '28px', borderRadius: '18px',
+            width: '400px', display: 'flex', flexDirection: 'column', gap: '20px',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.25)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>🔗 Elegir Relación</h2>
+              <button className="btn" onClick={() => {
+                setShowRelationModal(false);
+                setQuickConnectSourceUri(null);
+                setPendingConnectionTarget(null);
+              }}>✕</button>
+            </div>
+
+            {/* Node pair summary */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(0,0,0,0.04)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {nodes.find(n => n.uri === quickConnectSourceUri)?.label || '…'}
+              </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {nodes.find(n => n.uri === pendingConnectionTarget)?.label || pendingConnectionTarget.split('/').pop()}
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label style={{ fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px' }}>Tipo de relación semántica</label>
+              <select
+                value={selectedRelationPredicate}
+                onChange={(e) => setSelectedRelationPredicate(e.target.value)}
+                style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.85rem', width: '100%' }}
+              >
+                <optgroup label="VIVO (académico)">
+                  <option value="http://vivoweb.org/ontology/core#advisor">vivo:advisor — Director de tesis</option>
+                  <option value="http://vivoweb.org/ontology/core#hasMember">vivo:hasMember — Miembro de proyecto</option>
+                  <option value="http://vivoweb.org/ontology/core#relatedBy">vivo:relatedBy — Relación genérica</option>
+                  <option value="http://vivoweb.org/ontology/core#supportedInformationResource">vivo:supportedInformationResource — Produce paper</option>
+                  <option value="http://vivoweb.org/ontology/core#hasCollaborator">vivo:hasCollaborator — Colabora con</option>
+                </optgroup>
+                <optgroup label="DBLP / Bibliográfico">
+                  <option value="https://dblp.org/rdf/schema#authoredBy">dblp:authoredBy — Autoría de paper</option>
+                  <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado en</option>
+                </optgroup>
+                <optgroup label="RFU (proyecto)">
+                  <option value="http://cientopolis.org/rfu/collaboratesWith">rfu:collaboratesWith — Colabora con</option>
+                  <option value="http://cientopolis.org/rfu/supervises">rfu:supervises — Supervisa</option>
+                  <option value="http://cientopolis.org/rfu/partOf">rfu:partOf — Parte de</option>
+                  <option value="http://cientopolis.org/rfu/researchedIn">rfu:researchedIn — Investigado en</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => {
+                setShowRelationModal(false);
+                setQuickConnectSourceUri(null);
+                setPendingConnectionTarget(null);
+              }}>Omitir relación</button>
+              <button className="btn btn-primary" onClick={createRelation}>
+                Conectar Nodos
+              </button>
             </div>
           </div>
         </div>

@@ -580,6 +580,11 @@ body, html, #root {
 }
 
 /* Gear button on nodes to open inspector */
+/* Quick-connect "+" button — visible on node card hover */
+.node-card:hover .node-quick-connect-btn {
+  opacity: 1 !important;
+}
+
 .node-inspect-btn {
   background: transparent;
   border: none;
