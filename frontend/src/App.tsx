@@ -1074,6 +1074,7 @@ SELECT ?s ?p ?o WHERE {
   };
 
   const getCleanType = (typeURI: string, thesisType?: string) => {
+    if (typeURI.includes('Mindmap')) return 'Mapa Mental';
     if (typeURI.includes('FacultyMember')) return 'Investigador';
     if (typeURI.includes('GraduateStudent')) return 'Estudiante de posgrado';
     if (typeURI.includes('UndergraduateStudent')) return 'Estudiante de grado';
@@ -1090,6 +1091,7 @@ SELECT ?s ?p ?o WHERE {
 
   // Helper selector helper mapping component styles
   const getNodeComponentId = (type: string, thesisType?: string) => {
+    if (type.includes('Mindmap')) return 'nodeMindmap';
     if (type.includes('FacultyMember')) return 'nodeInvestigador';
     if (type.includes('GraduateStudent')) return 'nodeTesistaPosgrado';
     if (type.includes('UndergraduateStudent')) return 'nodeTesistaDeGrado';
@@ -1520,6 +1522,7 @@ SELECT ?s ?p ?o WHERE {
               nodeTesisDoctoral:  { bg: 'rgba(255, 237, 213, 0.9)',  chipColor: '#ea580c', titleColor: '#7c2d12', tagBg: 'rgba(234,88,12,0.15)',   tagColor: '#7c2d12' },
               nodeTesisMaestria:  { bg: 'rgba(254, 249, 195, 0.9)',  chipColor: '#ca8a04', titleColor: '#713f12', tagBg: 'rgba(202,138,4,0.15)',   tagColor: '#713f12' },
               nodeTopicCSO:       { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0d9488', titleColor: '#134e4a', tagBg: 'rgba(13,148,136,0.15)',  tagColor: '#134e4a' },
+              nodeMindmap:        { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#4f46e5', titleColor: '#312e81', tagBg: 'rgba(79,70,229,0.15)',   tagColor: '#312e81' },
             };
             const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
 
@@ -1548,7 +1551,7 @@ SELECT ?s ?p ?o WHERE {
                 }}
                 onMouseDown={(e) => startDragNode(e, node)}
                 onDoubleClick={(e) => {
-                  if (node.type === 'http://cientopolis.org/rfu/Mindmap') {
+                  if (node.type.includes('Mindmap')) {
                     e.stopPropagation();
                     setActiveMindmapNode(node);
                     setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
@@ -1642,6 +1645,39 @@ SELECT ?s ?p ?o WHERE {
                 <p style={{ margin: 0, fontSize: '0.62rem', color: chip.titleColor, opacity: 0.45, lineHeight: 1.2 }}>
                   {getCleanLabel(node.uri)}
                 </p>
+
+                {/* Mindmap specific trigger button */}
+                {node.type.includes('Mindmap') && (
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMindmapNode(node);
+                      setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
+                      setShowMindmapModal(true);
+                    }}
+                    style={{
+                      marginTop: '6px',
+                      padding: '5px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#fff',
+                      background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      boxShadow: '0 2px 6px rgba(79,70,229,0.3)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Abrir editor de Mapa Mental"
+                  >
+                    🧠 Ver / Editar Mapa Mental
+                  </button>
+                )}
               </div>
             );
           })}
