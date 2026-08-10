@@ -1031,6 +1031,12 @@ SELECT ?s ?p ?o WHERE {
   };
 
   const getCleanType = (typeURI: string, thesisType?: string) => {
+    if (typeURI.includes('FacultyMember')) return 'Investigador';
+    if (typeURI.includes('GraduateStudent')) return 'Estudiante de posgrado';
+    if (typeURI.includes('UndergraduateStudent')) return 'Estudiante de grado';
+    if (typeURI.includes('Project')) return 'Proyecto';
+    if (typeURI.includes('Article') || typeURI.includes('Publication')) return 'Paper';
+    if (typeURI.includes('Topic')) return 'Tópico CSO';
     if (typeURI.includes('Thesis')) {
       if (thesisType === 'PhD Thesis') return 'Tesis Doctoral';
       if (thesisType === 'Magister') return 'Tesis de Maestría';
