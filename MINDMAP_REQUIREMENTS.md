@@ -20,7 +20,7 @@
 
 ## 📋 Hoja de Ruta Paso a Paso
 
-- [ ] **Paso 1:** Crear el conversor/parser bidireccional **JSON ↔ Markdown** (`mindmapParser.ts`) y sus pruebas unitarias.
+- [x] **Paso 1:** Crear el conversor/parser bidireccional **JSON ↔ Markdown** (`mindmapParser.ts`) y sus pruebas unitarias.
 - [ ] **Paso 2:** Crear el componente del Lienzo Mindmap (`MindmapCanvas.tsx`) con renderizado de nodos recursivos, líneas conectoras curvas (Bézier) y navegación por teclado (`Tab`, `Enter`, `Delete`, flechas).
 - [ ] **Paso 3:** Agregar selector de color por nodo/rama, colapso de subramas (`+` / `-`) y edición directa in-situ.
 - [ ] **Paso 4:** Integrar el modal / panel vista Mindmap en la interfaz general (`App.tsx`) con barra de herramientas (Exportar/Importar `.md`, Descargar imagen/SVG).
