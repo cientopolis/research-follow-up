@@ -1315,10 +1315,10 @@ SELECT ?s ?p ?o WHERE {
                 const hFrom = nodeHeights[conn.from] || 80;
                 const hTo = nodeHeights[conn.to] || 80;
 
-                // Node Centers
-                let cx1 = fromNode.x + 90;
+                // Node Centers (width = 220px -> half = 110px)
+                let cx1 = fromNode.x + 110;
                 let cy1 = fromNode.y + hFrom / 2;
-                let cx2 = toNode.x + 90;
+                let cx2 = toNode.x + 110;
                 let cy2 = toNode.y + hTo / 2;
                 
                 let fromHeight = hFrom;
@@ -1329,18 +1329,18 @@ SELECT ?s ?p ?o WHERE {
                   const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
                   const isToFaculty = toNode.type.includes('FacultyMember');
                   if (isFromStudent && isToFaculty) {
-                    cx1 = toNode.x + 90;
+                    cx1 = toNode.x + 110;
                     cy1 = toNode.y + hTo / 2;
-                    cx2 = fromNode.x + 90;
+                    cx2 = fromNode.x + 110;
                     cy2 = fromNode.y + hFrom / 2;
                     fromHeight = hTo;
                     toHeight = hFrom;
                   }
                 }
 
-                // Border Intersections
-                const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 180, fromHeight);
-                const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 180, toHeight);
+                // Border Intersections (w = 220)
+                const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 220, fromHeight);
+                const endPt = getCardBorderPoint(cx2, cy2, cx1, cy1, 220, toHeight);
 
                 const x1 = startPt.x;
                 const y1 = startPt.y;
@@ -1534,6 +1534,14 @@ SELECT ?s ?p ?o WHERE {
                 >+</button>
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Inspector / Details Gear Icon (Left side) */}
+                  <button
+                    className="node-inspect-btn"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setSelectedNode(node); setSelectedConnection(null); setIsInspectorOpen(true); }}
+                    title="Ver detalles / Configurar nodo"
+                    style={{ color: chip.titleColor, fontSize: '0.95rem', padding: '2px', cursor: 'pointer', background: 'none', border: 'none' }}
+                  >⚙️</button>
                   {/* Avatar / Icon */}
                   <NodeAvatar
                     nodeType={nodeDomId}
@@ -1568,23 +1576,7 @@ SELECT ?s ?p ?o WHERE {
                       )}
                     </div>
                   </div>
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
-                    {node.status && <span style={{ fontSize: '0.6rem', color: chip.chipColor, alignSelf: 'center' }}>{node.status}</span>}
-                    <button
-                      className="node-inspect-btn"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setSelectedNode(node); setSelectedConnection(null); setIsInspectorOpen(true); }}
-                      title="Inspeccionar propiedades"
-                      style={{ color: chip.titleColor }}
-                    >⚙️</button>
-                    <button
-                      className="node-delete-btn"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setNodeToDelete(node); }}
-                      title="Eliminar nodo"
-                    >❌</button>
-                  </div>
+                  {node.status && <span style={{ fontSize: '0.6rem', color: chip.chipColor, alignSelf: 'center', flexShrink: 0 }}>{node.status}</span>}
                 </div>
                 <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: chip.titleColor, lineHeight: 1.25, wordBreak: 'break-word' }}>
                   {node.label}
@@ -1933,8 +1925,22 @@ SELECT ?s ?p ?o WHERE {
 
                   {/* Botones de acción del Modal */}
                   <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                    <button className="btn" onClick={() => { setSelectedNode(null); setIsInspectorOpen(false); }}>Cancelar</button>
-                    <button className="btn btn-primary" onClick={saveNodeProperties}>Guardar Cambios</button>
+                    <button
+                      className="btn"
+                      style={{ color: '#d20f39', borderColor: '#d20f39' }}
+                      onClick={() => {
+                        const targetNode = selectedNode;
+                        setSelectedNode(null);
+                        setIsInspectorOpen(false);
+                        setNodeToDelete(targetNode);
+                      }}
+                    >
+                      🗑️ Eliminar Nodo
+                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn" onClick={() => { setSelectedNode(null); setIsInspectorOpen(false); }}>Cancelar</button>
+                      <button className="btn btn-primary" onClick={saveNodeProperties}>Guardar Cambios</button>
+                    </div>
                   </div>
                 </>
               )}
