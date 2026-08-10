@@ -97,6 +97,10 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     }
   }, [editingId]);
 
+  // Drag & drop state for individual mindmap nodes
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [nodeDragOffset, setNodeDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
   // Helper functions for immutable tree updates
   const updateNodeInTree = useCallback((tree: MindmapNode, targetId: string, updater: (n: MindmapNode) => MindmapNode): MindmapNode => {
     if (tree.id === targetId) {
@@ -108,12 +112,20 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     };
   }, []);
 
-  const addChildNode = useCallback((tree: MindmapNode, parentId: string): { newTree: MindmapNode; newId: string } => {
+  const addChildNode = useCallback((tree: MindmapNode, parentId: string, forcedSide?: 'left' | 'right'): { newTree: MindmapNode; newId: string } => {
     const newId = `node-${Date.now()}`;
-    const newNode: MindmapNode = { id: newId, text: 'Nueva Rama', children: [] };
 
     const insert = (n: MindmapNode): MindmapNode => {
       if (n.id === parentId) {
+        let side: 'left' | 'right' | undefined = forcedSide;
+        if (!side && n.id === 'root') {
+          const leftCount = n.children.filter(c => c.side === 'left').length;
+          const rightCount = n.children.filter(c => c.side !== 'left').length;
+          side = leftCount <= rightCount ? 'left' : 'right';
+        } else if (!side && n.side) {
+          side = n.side;
+        }
+        const newNode: MindmapNode = { id: newId, text: 'Nueva Rama', side: side || 'right', children: [] };
         return { ...n, folded: false, children: [...n.children, newNode] };
       }
       return { ...n, children: n.children.map(insert) };
@@ -126,11 +138,12 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     if (tree.id === targetId) return null; // Root cannot have sibling
 
     const newId = `node-${Date.now()}`;
-    const newNode: MindmapNode = { id: newId, text: 'Nueva Rama', children: [] };
 
     const insertSibling = (parent: MindmapNode): MindmapNode => {
       const idx = parent.children.findIndex(c => c.id === targetId);
       if (idx !== -1) {
+        const targetChild = parent.children[idx];
+        const newNode: MindmapNode = { id: newId, text: 'Nueva Rama', side: targetChild.side || 'right', children: [] };
         const nextChildren = [...parent.children];
         nextChildren.splice(idx + 1, 0, newNode);
         return { ...parent, children: nextChildren };
@@ -196,14 +209,15 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Layout calculation for tree positioning
+  // Layout calculation for tree positioning (Left & Right dual tree with generous spacing)
   const layoutNodes = useCallback((): { positioned: PositionedNode[]; connections: { x1: number; y1: number; x2: number; y2: number; color: string }[] } => {
     const positioned: PositionedNode[] = [];
     const connections: { x1: number; y1: number; x2: number; y2: number; color: string }[] = [];
 
-    const NODE_HEIGHT = 40;
-    const NODE_H_GAP = 180;
-    const NODE_V_GAP = 16;
+    const NODE_HEIGHT = 44;
+    const NODE_WIDTH = 150;
+    const NODE_H_GAP = 260; // Generous horizontal spacing for clean tree structure
+    const NODE_V_GAP = 28;  // Generous vertical spacing
 
     // Calculate vertical subtree height
     function getSubtreeHeight(node: MindmapNode): number {
@@ -215,16 +229,28 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
       return Math.max(NODE_HEIGHT, childrenH + gapsH);
     }
 
-    function positionSubtree(node: MindmapNode, x: number, startY: number, depth: number, parentId?: string, branchColor?: string) {
+    function positionSubtree(
+      node: MindmapNode,
+      x: number,
+      startY: number,
+      depth: number,
+      direction: 'left' | 'right',
+      parentId?: string,
+      branchColor?: string
+    ) {
       const color = node.color || branchColor || PALETTE[depth % PALETTE.length];
       const nodeH = getSubtreeHeight(node);
-      const nodeY = startY + nodeH / 2 - NODE_HEIGHT / 2;
+      const calculatedY = startY + nodeH / 2 - NODE_HEIGHT / 2;
+
+      // Use stored position if node was dragged, otherwise use calculated tree position
+      const finalX = node.x !== undefined ? node.x : x;
+      const finalY = node.y !== undefined ? node.y : calculatedY;
 
       positioned.push({
         node,
-        x,
-        y: nodeY,
-        width: 140,
+        x: finalX,
+        y: finalY,
+        width: node.id === 'root' ? 180 : NODE_WIDTH,
         height: NODE_HEIGHT,
         depth,
         parentId,
@@ -237,27 +263,127 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
           const childH = getSubtreeHeight(child);
           const childColor = child.color || (depth === 0 ? PALETTE[idx % PALETTE.length] : color);
 
-          // Connection coordinates (from right edge of parent to left edge of child)
-          const x1 = x + 140;
-          const y1 = nodeY + NODE_HEIGHT / 2;
-          const x2 = x + NODE_H_GAP;
-          const y2 = currentY + childH / 2;
+          const childX = direction === 'left' ? x - NODE_H_GAP : x + NODE_H_GAP;
+
+          // Compute connection start/end points
+          const parentWidth = node.id === 'root' ? 180 : NODE_WIDTH;
+          const childWidth = NODE_WIDTH;
+
+          const parentFinalX = node.x !== undefined ? node.x : x;
+          const parentFinalY = node.y !== undefined ? node.y : calculatedY;
+
+          const childFinalX = child.x !== undefined ? child.x : childX;
+          const childCalculatedY = currentY + childH / 2 - NODE_HEIGHT / 2;
+          const childFinalY = child.y !== undefined ? child.y : childCalculatedY;
+
+          let x1: number, x2: number;
+          if (direction === 'left') {
+            x1 = parentFinalX;
+            x2 = childFinalX + childWidth;
+          } else {
+            x1 = parentFinalX + parentWidth;
+            x2 = childFinalX;
+          }
+          const y1 = parentFinalY + NODE_HEIGHT / 2;
+          const y2 = childFinalY + NODE_HEIGHT / 2;
 
           connections.push({ x1, y1, x2, y2, color: childColor });
 
-          positionSubtree(child, x + NODE_H_GAP, currentY, depth + 1, node.id, childColor);
+          positionSubtree(child, childX, currentY, depth + 1, direction, node.id, childColor);
           currentY += childH + NODE_V_GAP;
         });
       }
     }
 
-    positionSubtree(root, 0, 0, 0);
+    // Root node position
+    const rootX = root.x !== undefined ? root.x : 0;
+    const rootY = root.y !== undefined ? root.y : 0;
+
+    positioned.push({
+      node: root,
+      x: rootX,
+      y: rootY,
+      width: 180,
+      height: 48,
+      depth: 0,
+      color: root.color || PALETTE[0]
+    });
+
+    const rightChildren = root.children.filter(c => c.side !== 'left');
+    const leftChildren = root.children.filter(c => c.side === 'left');
+
+    if (rightChildren.length > 0) {
+      const rightTotalH = rightChildren.reduce((acc, c) => acc + getSubtreeHeight(c), 0) + (rightChildren.length - 1) * NODE_V_GAP;
+      let startY = rootY + 24 - rightTotalH / 2;
+      rightChildren.forEach((child, idx) => {
+        const childH = getSubtreeHeight(child);
+        const childColor = child.color || PALETTE[idx % PALETTE.length];
+        const childX = rootX + 180 + NODE_H_GAP - 180;
+
+        const parentFinalX = rootX;
+        const parentFinalY = rootY;
+
+        const childFinalX = child.x !== undefined ? child.x : childX;
+        const childCalculatedY = startY + childH / 2 - NODE_HEIGHT / 2;
+        const childFinalY = child.y !== undefined ? child.y : childCalculatedY;
+
+        connections.push({
+          x1: parentFinalX + 180,
+          y1: parentFinalY + 24,
+          x2: childFinalX,
+          y2: childFinalY + NODE_HEIGHT / 2,
+          color: childColor
+        });
+
+        positionSubtree(child, childX, startY, 1, 'right', 'root', childColor);
+        startY += childH + NODE_V_GAP;
+      });
+    }
+
+    if (leftChildren.length > 0) {
+      const leftTotalH = leftChildren.reduce((acc, c) => acc + getSubtreeHeight(c), 0) + (leftChildren.length - 1) * NODE_V_GAP;
+      let startY = rootY + 24 - leftTotalH / 2;
+      leftChildren.forEach((child, idx) => {
+        const childH = getSubtreeHeight(child);
+        const childColor = child.color || PALETTE[(idx + 3) % PALETTE.length];
+        const childX = rootX - NODE_H_GAP;
+
+        const parentFinalX = rootX;
+        const parentFinalY = rootY;
+
+        const childFinalX = child.x !== undefined ? child.x : childX;
+        const childCalculatedY = startY + childH / 2 - NODE_HEIGHT / 2;
+        const childFinalY = child.y !== undefined ? child.y : childCalculatedY;
+
+        connections.push({
+          x1: parentFinalX,
+          y1: parentFinalY + 24,
+          x2: childFinalX + NODE_WIDTH,
+          y2: childFinalY + NODE_HEIGHT / 2,
+          color: childColor
+        });
+
+        positionSubtree(child, childX, startY, 1, 'left', 'root', childColor);
+        startY += childH + NODE_V_GAP;
+      });
+    }
+
     return { positioned, connections };
   }, [root]);
 
   const { positioned, connections } = layoutNodes();
 
-  // Canvas Mouse Pan
+  // Node Drag & Drop Handlers
+  const handleNodeMouseDown = (e: React.MouseEvent, pNode: PositionedNode) => {
+    e.stopPropagation();
+    setSelectedId(pNode.node.id);
+    setDraggedNodeId(pNode.node.id);
+    setNodeDragOffset({
+      x: e.clientX / zoom - pNode.x,
+      y: e.clientY / zoom - pNode.y
+    });
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
       setIsPanning(true);
@@ -266,12 +392,26 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
+    if (draggedNodeId) {
+      const nextX = e.clientX / zoom - nodeDragOffset.x;
+      const nextY = e.clientY / zoom - nodeDragOffset.y;
+
+      const newTree = updateNodeInTree(root, draggedNodeId, n => ({
+        ...n,
+        x: Math.round(nextX),
+        y: Math.round(nextY)
+      }));
+      setRoot(newTree);
+    } else if (isPanning) {
       setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
     }
   };
 
   const handleMouseUp = () => {
+    if (draggedNodeId) {
+      setDraggedNodeId(null);
+      notifyChange(root);
+    }
     setIsPanning(false);
   };
 
@@ -410,14 +550,17 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
 
         {/* Nodes */}
         <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'auto' }}>
-          {positioned.map(({ node, x, y, width, height, color }) => {
+          {positioned.map((pNode) => {
+            const { node, x, y, width, height, color } = pNode;
             const isSelected = selectedId === node.id;
             const isEditing = editingId === node.id;
             const isRoot = node.id === 'root';
+            const isLeftBranch = node.side === 'left';
 
             return (
               <div
                 key={node.id}
+                onMouseDown={(e) => handleNodeMouseDown(e, pNode)}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedId(node.id);
@@ -445,9 +588,9 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: '6px',
-                  cursor: 'pointer',
+                  cursor: 'move',
                   boxSizing: 'border-box',
-                  transition: 'all 0.15s ease',
+                  transition: draggedNodeId === node.id ? 'none' : 'all 0.15s ease',
                 }}
               >
                 {/* Node Accent Left Bar */}
@@ -521,42 +664,83 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
                   </button>
                 )}
 
-                {/* Quick Add Sub-branch "+" Button on Right Border */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const { newTree, newId } = addChildNode(root, node.id);
-                    setRoot(newTree);
-                    setSelectedId(newId);
-                    setEditingId(newId);
-                    setEditText('Nueva Rama');
-                    notifyChange(newTree);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    right: '-12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    background: color,
-                    color: '#fff',
-                    border: '2px solid #fff',
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: `0 2px 6px ${color}66`,
-                    zIndex: 5,
-                    lineHeight: 1
-                  }}
-                  title="Agregar subrama (Tab)"
-                >
-                  +
-                </button>
+                {/* Left "+" Add Button for Root or Left Branches */}
+                {(isRoot || isLeftBranch) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const { newTree, newId } = addChildNode(root, node.id, 'left');
+                      setRoot(newTree);
+                      setSelectedId(newId);
+                      setEditingId(newId);
+                      setEditText('Nueva Rama');
+                      notifyChange(newTree);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: '-12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: color,
+                      color: '#fff',
+                      border: '2px solid #fff',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: `0 2px 6px ${color}66`,
+                      zIndex: 5,
+                      lineHeight: 1
+                    }}
+                    title="Agregar rama a la izquierda"
+                  >
+                    +
+                  </button>
+                )}
+
+                {/* Right "+" Add Button for Root or Right Branches */}
+                {(isRoot || !isLeftBranch) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const { newTree, newId } = addChildNode(root, node.id, 'right');
+                      setRoot(newTree);
+                      setSelectedId(newId);
+                      setEditingId(newId);
+                      setEditText('Nueva Rama');
+                      notifyChange(newTree);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '-12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: color,
+                      color: '#fff',
+                      border: '2px solid #fff',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: `0 2px 6px ${color}66`,
+                      zIndex: 5,
+                      lineHeight: 1
+                    }}
+                    title="Agregar rama a la derecha"
+                  >
+                    +
+                  </button>
+                )}
               </div>
             );
           })}

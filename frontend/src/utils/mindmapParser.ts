@@ -6,6 +6,9 @@ export interface MindmapNode {
   text: string;
   color?: string;
   folded?: boolean;
+  x?: number;
+  y?: number;
+  side?: 'left' | 'right';
   children: MindmapNode[];
 }
 
@@ -21,8 +24,12 @@ export interface MindmapNode {
 export function mindmapToMarkdown(root: MindmapNode): string {
   const lines: string[] = [];
 
+  let rootMeta = '';
+  if (root.x !== undefined && root.y !== undefined) rootMeta += ` <!-- pos:${Math.round(root.x)},${Math.round(root.y)} -->`;
+  if (root.color) rootMeta += ` <!-- color:${root.color} -->`;
+
   // Root node as Level 1 Heading if not empty, otherwise bullet
-  lines.push(`# ${root.text || 'Mapa Mental'}`);
+  lines.push(`# ${root.text || 'Mapa Mental'}${rootMeta}`);
 
   function serializeChildren(nodes: MindmapNode[], depth: number) {
     const indent = '  '.repeat(depth);
@@ -30,6 +37,8 @@ export function mindmapToMarkdown(root: MindmapNode): string {
       let metaStr = '';
       if (node.color) metaStr += ` <!-- color:${node.color} -->`;
       if (node.folded) metaStr += ` <!-- folded:true -->`;
+      if (node.side) metaStr += ` <!-- side:${node.side} -->`;
+      if (node.x !== undefined && node.y !== undefined) metaStr += ` <!-- pos:${Math.round(node.x)},${Math.round(node.y)} -->`;
 
       lines.push(`${indent}- ${node.text || 'Nuevo nodo'}${metaStr}`);
 
@@ -50,7 +59,11 @@ export function markdownToMindmap(markdown: string): MindmapNode {
   const lines = markdown.split('\n');
 
   let rootText = 'Mapa Mental';
-  const rawListLines: { indentLevel: number; text: string; color?: string; folded?: boolean }[] = [];
+  let rootX: number | undefined;
+  let rootY: number | undefined;
+  let rootColor: string | undefined;
+
+  const rawListLines: { indentLevel: number; text: string; color?: string; folded?: boolean; side?: 'left' | 'right'; x?: number; y?: number }[] = [];
 
   for (const rawLine of lines) {
     const line = rawLine.trimEnd();
@@ -59,7 +72,19 @@ export function markdownToMindmap(markdown: string): MindmapNode {
     // Check for H1 header `# Central Topic`
     const h1Match = line.match(/^#\s+(.+)$/);
     if (h1Match) {
-      rootText = h1Match[1].trim();
+      let h1Content = h1Match[1];
+      const posMatch = h1Content.match(/<!--\s*pos:(-?\d+),(-?\d+)\s*-->/);
+      if (posMatch) {
+        rootX = parseInt(posMatch[1], 10);
+        rootY = parseInt(posMatch[2], 10);
+        h1Content = h1Content.replace(posMatch[0], '');
+      }
+      const colorMatch = h1Content.match(/<!--\s*color:([\s\S]*?)\s*-->/);
+      if (colorMatch) {
+        rootColor = colorMatch[1].trim();
+        h1Content = h1Content.replace(colorMatch[0], '');
+      }
+      rootText = h1Content.trim();
       continue;
     }
 
@@ -73,6 +98,16 @@ export function markdownToMindmap(markdown: string): MindmapNode {
       // Extract metadata comments if present
       let color: string | undefined = undefined;
       let folded: boolean | undefined = undefined;
+      let side: 'left' | 'right' | undefined = undefined;
+      let x: number | undefined = undefined;
+      let y: number | undefined = undefined;
+
+      const posMatch = content.match(/<!--\s*pos:(-?\d+),(-?\d+)\s*-->/);
+      if (posMatch) {
+        x = parseInt(posMatch[1], 10);
+        y = parseInt(posMatch[2], 10);
+        content = content.replace(posMatch[0], '');
+      }
 
       const colorMatch = content.match(/<!--\s*color:([\s\S]*?)\s*-->/);
       if (colorMatch) {
@@ -86,11 +121,20 @@ export function markdownToMindmap(markdown: string): MindmapNode {
         content = content.replace(foldedMatch[0], '');
       }
 
+      const sideMatch = content.match(/<!--\s*side:(left|right)\s*-->/);
+      if (sideMatch) {
+        side = sideMatch[1].trim() as 'left' | 'right';
+        content = content.replace(sideMatch[0], '');
+      }
+
       rawListLines.push({
         indentLevel,
         text: content.trim(),
         color,
-        folded
+        folded,
+        side,
+        x,
+        y
       });
     }
   }
@@ -98,6 +142,9 @@ export function markdownToMindmap(markdown: string): MindmapNode {
   const rootNode: MindmapNode = {
     id: 'root',
     text: rootText,
+    x: rootX,
+    y: rootY,
+    color: rootColor,
     children: []
   };
 
@@ -113,6 +160,9 @@ export function markdownToMindmap(markdown: string): MindmapNode {
       text: item.text,
       color: item.color,
       folded: item.folded,
+      side: item.side,
+      x: item.x,
+      y: item.y,
       children: []
     };
 
