@@ -1,15 +1,27 @@
 # Requerimientos: Funcionalidad Mindmap
 
-**Rama Activa:** `feature/mindmap`
+**Rama Activa:** `feature/mindmap`  
+**Arquitectura Elegida:** Motor Árbol Jerárquico en React + Serializador/Deserializador Markdown.
 
 ---
 
-## 📌 Progreso del Requerimiento
+## 📐 Especificación de Arquitectura
 
-Quedo a la espera de tus instrucciones paso a paso para definir la funcionalidad **Mindmap** de forma incremental.
+- **Estructura Interna:** Árbol de nodos en estado React (`{ id, text, color, folded, children: [] }`).
+- **Persistencia y Estándar:** Serialización bidireccional continua con formato **Markdown** (listas anidadas `-` e indización tabulada `\t`).
+- **Interacción Estilo FreeMind:**
+  - `Tab`: Crear subrama hijo.
+  - `Enter`: Crear rama hermana al mismo nivel.
+  - `Espacio / Clic`: Editar texto in-situ.
+  - Drag & Drop de nodos/subramas.
+  - Colores por rama/nivel y nodos colapsables/expandibles (`folded`).
 
 ---
 
-## 📋 Lista de Pasos
+## 📋 Hoja de Ruta Paso a Paso
 
-*(Aún no se han definido pasos. Iré completando este documento a medida que me indiques cada requerimiento).*
+- [ ] **Paso 1:** Crear el conversor/parser bidireccional **JSON ↔ Markdown** (`mindmapParser.ts`) y sus pruebas unitarias.
+- [ ] **Paso 2:** Crear el componente del Lienzo Mindmap (`MindmapCanvas.tsx`) con renderizado de nodos recursivos, líneas conectoras curvas (Bézier) y navegación por teclado (`Tab`, `Enter`, `Delete`, flechas).
+- [ ] **Paso 3:** Agregar selector de color por nodo/rama, colapso de subramas (`+` / `-`) y edición directa in-situ.
+- [ ] **Paso 4:** Integrar el modal / panel vista Mindmap en la interfaz general (`App.tsx`) con barra de herramientas (Exportar/Importar `.md`, Descargar imagen/SVG).
+- [ ] **Paso 5:** Guardar y sincronizar los mapas mentales en GraphDB (como literal Markdown asociado a investigaciones/proyectos).
