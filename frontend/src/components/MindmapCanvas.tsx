@@ -284,6 +284,48 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
         setZoom(prev => Math.min(Math.max(0.3, prev * zoomDelta), 2.5));
       }}
     >
+      {/* Floating Toolbar for Selected Node */}
+      {selectedId && (
+        <div style={{
+          position: 'absolute', top: 14, right: 14, zIndex: 10,
+          background: 'var(--bg-mantle)', padding: '8px 12px', borderRadius: '10px',
+          border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)'
+        }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Color:</span>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {PALETTE.map((c) => (
+              <button
+                key={c}
+                onClick={() => {
+                  const newTree = updateNodeInTree(root, selectedId, n => ({ ...n, color: c }));
+                  setRoot(newTree);
+                  notifyChange(newTree);
+                }}
+                style={{
+                  width: 20, height: 20, borderRadius: '50%', background: c, border: 'none',
+                  cursor: 'pointer', outline: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
+                }}
+              />
+            ))}
+            <button
+              onClick={() => {
+                const newTree = updateNodeInTree(root, selectedId, n => ({ ...n, color: undefined }));
+                setRoot(newTree);
+                notifyChange(newTree);
+              }}
+              title="Restablecer color por defecto"
+              style={{
+                fontSize: '0.7rem', padding: '2px 6px', background: 'transparent', border: '1px solid var(--border-color)',
+                borderRadius: '4px', cursor: 'pointer', color: 'var(--text-muted)'
+              }}
+            >
+              Auto
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Instructions Overlay */}
       <div style={{
         position: 'absolute', top: 14, left: 14, zIndex: 10,

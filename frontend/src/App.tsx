@@ -7,6 +7,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { NodeAvatar } from './components/NodeAvatar';
 import { IconPicker } from './components/IconPicker';
 import { AvatarPicker } from './components/AvatarPicker';
+import { MindmapCanvas } from './components/MindmapCanvas';
 
 interface RDFNode {
   uri: string;
@@ -182,6 +183,20 @@ SELECT ?s ?p ?o WHERE {
 } LIMIT 10`);
   const [sparqlResult, setSparqlResult] = useState<string>('');
   const [activeRightPanel, setActiveRightPanel] = useState<'none' | 'sparql' | 'pomodoro'>('none');
+
+  // Mindmap Modal state
+  const [showMindmapModal, setShowMindmapModal] = useState(false);
+  const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Mapa Mental de Investigación
+- Objetivos Principales <!-- color:#1e66f5 -->
+  - Publicación Journal Q1
+  - Prototipo Web React
+- Equipo y Recursos <!-- color:#16a34a -->
+  - Investigador Principal
+  - Tesistas de Grado / Posgrado
+- Metodología <!-- color:#ea580c -->
+  - Consultas SPARQL GraphDB
+  - Diseño de Grafos Semánticos
+`);
 
 
 
@@ -1112,6 +1127,13 @@ SELECT ?s ?p ?o WHERE {
               }}
             >
               {isConnectingMode ? 'Conectando...' : 'Conectar Nodos'}
+            </button>
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnMindmap</span>}
+            <button className="btn" onClick={() => setShowMindmapModal(true)} style={{ background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed', borderColor: 'rgba(124, 58, 237, 0.3)' }}>
+              🧠 Mapa Mental
             </button>
           </div>
           
@@ -2375,6 +2397,88 @@ SELECT ?s ?p ?o WHERE {
         {isDev && <span className="dev-tag-badge">#sidebarPomodoro</span>}
         <PomodoroTimer onClose={() => setActiveRightPanel('none')} nodes={nodes} />
       </div>
+
+      {/* Fullscreen Mindmap Modal */}
+      {showMindmapModal && (
+        <div className="modal-backdrop" style={{ zIndex: 1000, background: 'rgba(0,0,0,0.65)' }}>
+          <div style={{
+            width: '92vw', height: '90vh', background: 'var(--bg-surface)',
+            borderRadius: '16px', border: '1px solid var(--border-color)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)', position: 'relative'
+          }}>
+            {/* Mindmap Modal Header */}
+            <div style={{
+              padding: '14px 24px', background: 'var(--bg-mantle)',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.4rem' }}>🧠</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Mapa Mental (FreeMind / Markdown)</h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Crea y organiza ramas libremente. Guardado en formato estándar Markdown.</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    const blob = new Blob([mindmapMarkdown], { type: 'text/markdown;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'mapa-mental.md';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  title="Descargar archivo Markdown"
+                >
+                  📥 Exportar .md
+                </button>
+                <label
+                  className="btn"
+                  style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                  title="Cargar archivo Markdown"
+                >
+                  📤 Importar .md
+                  <input
+                    type="file"
+                    accept=".md,.txt"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          const text = evt.target?.result as string;
+                          if (text) setMindmapMarkdown(text);
+                        };
+                        reader.readAsText(file);
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowMindmapModal(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            {/* Mindmap Interactive Canvas Container */}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <MindmapCanvas
+                initialMarkdown={mindmapMarkdown}
+                onChange={(md) => setMindmapMarkdown(md)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
 
       </div>
