@@ -917,7 +917,10 @@ SELECT ?s ?p ?o WHERE {
         // If this was a quick-connect action, open relation picker
         if (quickConnectSourceUri) {
           setPendingConnectionTarget(uri);
-          setSelectedRelationPredicate('http://vivoweb.org/ontology/core#relatedBy');
+          const defaultPred = finalType === 'http://cientopolis.org/rfu/Mindmap'
+            ? 'http://cientopolis.org/rfu/hasMindmap'
+            : 'http://vivoweb.org/ontology/core#relatedBy';
+          setSelectedRelationPredicate(defaultPred);
           setShowRelationModal(true);
         }
       }
@@ -1544,6 +1547,14 @@ SELECT ?s ?p ?o WHERE {
                   outlineOffset: '2px',
                 }}
                 onMouseDown={(e) => startDragNode(e, node)}
+                onDoubleClick={(e) => {
+                  if (node.type === 'http://cientopolis.org/rfu/Mindmap') {
+                    e.stopPropagation();
+                    setActiveMindmapNode(node);
+                    setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
+                    setShowMindmapModal(true);
+                  }
+                }}
               >
                 {/* Quick-connect "+" button on right edge */}
                 <button
@@ -1589,27 +1600,6 @@ SELECT ?s ?p ?o WHERE {
                     title="Ver detalles / Configurar nodo"
                     style={{ color: chip.titleColor, fontSize: '0.95rem', padding: '2px', cursor: 'pointer', background: 'none', border: 'none' }}
                   >⚙️</button>
-                  {/* Mindmap trigger button (🧠) */}
-                  <button
-                    className="node-mindmap-btn"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMindmapNode(node);
-                      setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
-                      setShowMindmapModal(true);
-                    }}
-                    title={node.mindmapContent ? "Abrir Mapa Mental de este nodo" : "Crear Mapa Mental para este nodo"}
-                    style={{
-                      fontSize: '0.95rem',
-                      padding: '2px',
-                      cursor: 'pointer',
-                      background: 'none',
-                      border: 'none',
-                      opacity: node.mindmapContent ? 1 : 0.6,
-                      filter: node.mindmapContent ? 'drop-shadow(0 0 4px #1e66f5)' : 'none'
-                    }}
-                  >🧠</button>
                   {/* Avatar / Icon */}
                   <NodeAvatar
                     nodeType={nodeDomId}
@@ -2143,6 +2133,7 @@ SELECT ?s ?p ?o WHERE {
                 <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#PhD">Tesis Doctoral (PhD Thesis)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#Master">Tesis de Maestría (Magister)</option>
+                <option value="http://cientopolis.org/rfu/Mindmap">🧠 Mapa Mental (rfu:Mindmap)</option>
               </select>
             </div>
             <div className="form-group">
@@ -2209,6 +2200,7 @@ SELECT ?s ?p ?o WHERE {
                   <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado en</option>
                 </optgroup>
                 <optgroup label="RFU (proyecto)">
+                  <option value="http://cientopolis.org/rfu/hasMindmap">rfu:hasMindmap — Mapa mental de</option>
                   <option value="http://cientopolis.org/rfu/collaboratesWith">rfu:collaboratesWith — Colabora con</option>
                   <option value="http://cientopolis.org/rfu/supervises">rfu:supervises — Supervisa</option>
                   <option value="http://cientopolis.org/rfu/partOf">rfu:partOf — Parte de</option>
