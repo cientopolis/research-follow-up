@@ -50,14 +50,27 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>('');
 
-  // Pan & Zoom state
-  const [pan, setPan] = useState({ x: 300, y: 300 });
+  // Pan & Zoom state — Auto-centered to container
+  const [pan, setPan] = useState({ x: 350, y: 250 });
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-center root bubble on container mount
+  useEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setPan({
+          x: Math.round(rect.width / 2 - 90),
+          y: Math.round(rect.height / 2 - 24)
+        });
+      }
+    }
+  }, []);
 
   // Notify parent on change
   const notifyChange = useCallback((newRoot: MindmapNode) => {
@@ -346,7 +359,15 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
         <button className="btn" style={{ padding: '2px 8px' }} onClick={() => setZoom(z => Math.min(2.5, z * 1.15))}>+</button>
         <span style={{ fontSize: '0.75rem', alignSelf: 'center', color: 'var(--text-muted)' }}>{Math.round(zoom * 100)}%</span>
         <button className="btn" style={{ padding: '2px 8px' }} onClick={() => setZoom(z => Math.max(0.3, z / 1.15))}>-</button>
-        <button className="btn" style={{ padding: '2px 8px' }} onClick={() => { setZoom(1); setPan({ x: 300, y: 300 }); }}>Recentrar</button>
+        <button className="btn" style={{ padding: '2px 8px' }} onClick={() => {
+          setZoom(1);
+          if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setPan({ x: Math.round(rect.width / 2 - 90), y: Math.round(rect.height / 2 - 24) });
+          } else {
+            setPan({ x: 350, y: 250 });
+          }
+        }}>Recentrar</button>
       </div>
 
       {/* Transform Viewport */}
