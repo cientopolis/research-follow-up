@@ -7,7 +7,7 @@ describe('MindmapCanvas', () => {
   it('renders root node interactively', () => {
     render(<MindmapCanvas />);
 
-    expect(screen.getByText('📌 Título del Mapa Mental')).toBeDefined();
+    expect(screen.getByText('Título')).toBeDefined();
   });
 
   it('renders initial custom markdown content', () => {
@@ -27,10 +27,10 @@ describe('MindmapCanvas', () => {
     render(<MindmapCanvas onChange={handleChange} />);
 
     // Double click root node to edit text
-    const rootEl = screen.getByText('📌 Título del Mapa Mental');
+    const rootEl = screen.getByText('Título');
     fireEvent.doubleClick(rootEl);
 
-    const inputEl = screen.getByDisplayValue('📌 Título del Mapa Mental');
+    const inputEl = screen.getByDisplayValue('Título');
     fireEvent.change(inputEl, { target: { value: 'Nuevo Título Mapa' } });
     fireEvent.blur(inputEl);
 

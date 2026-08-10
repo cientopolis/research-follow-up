@@ -41,7 +41,7 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     }
     return {
       id: 'root',
-      text: '📌 Título del Mapa Mental',
+      text: 'Título',
       children: []
     };
   });
@@ -50,8 +50,8 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>('');
 
-  // Pan & Zoom state — Auto-centered to container
-  const [pan, setPan] = useState({ x: 350, y: 250 });
+  // Pan & Zoom state — Initialized to centered position
+  const [pan, setPan] = useState({ x: 300, y: 200 });
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -59,8 +59,8 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
   const containerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-center root bubble on container mount
-  useEffect(() => {
+  // Auto-center root bubble on container mount & resize
+  const centerCanvas = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
@@ -71,6 +71,16 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
       }
     }
   }, []);
+
+  useEffect(() => {
+    // Initial centering after render
+    const timer = setTimeout(centerCanvas, 50);
+    window.addEventListener('resize', centerCanvas);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', centerCanvas);
+    };
+  }, [centerCanvas]);
 
   // Notify parent on change
   const notifyChange = useCallback((newRoot: MindmapNode) => {
@@ -379,8 +389,8 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
         pointerEvents: 'none'
       }}>
         {/* SVG Bezier Connections */}
-        <svg style={{ position: 'absolute', top: -5000, left: -5000, width: 10000, height: 10000, overflow: 'visible' }}>
-          <g transform="translate(5000, 5000)">
+        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+          <g>
             {connections.map((c, i) => {
               const dx = (c.x2 - c.x1) / 2;
               const path = `M ${c.x1} ${c.y1} C ${c.x1 + dx} ${c.y1}, ${c.x2 - dx} ${c.y2}, ${c.x2} ${c.y2}`;
@@ -399,7 +409,7 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
         </svg>
 
         {/* Nodes */}
-        <div style={{ position: 'absolute', top: 5000, left: 5000, pointerEvents: 'auto' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'auto' }}>
           {positioned.map(({ node, x, y, width, height, color }) => {
             const isSelected = selectedId === node.id;
             const isEditing = editingId === node.id;
