@@ -186,7 +186,7 @@ SELECT ?s ?p ?o WHERE {
 
   // Mindmap Modal state
   const [showMindmapModal, setShowMindmapModal] = useState(false);
-  const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Idea Central / Nuevo Mapa`);
+  const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# 📌 Título del Mapa Mental`);
 
 
 

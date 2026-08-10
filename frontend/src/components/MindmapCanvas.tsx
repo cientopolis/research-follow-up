@@ -41,7 +41,7 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     }
     return {
       id: 'root',
-      text: 'Idea Central / Nuevo Mapa',
+      text: '📌 Título del Mapa Mental',
       children: []
     };
   });
@@ -400,14 +400,16 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
                 style={{
                   position: 'absolute',
                   transform: `translate(${x}px, ${y}px)`,
-                  width,
-                  minHeight: height,
-                  background: isRoot ? color : 'var(--bg-surface)',
+                  width: isRoot ? 180 : width,
+                  minHeight: isRoot ? 48 : height,
+                  background: isRoot ? `linear-gradient(135deg, ${color}, #3b82f6)` : 'var(--bg-surface)',
                   color: isRoot ? '#fff' : 'var(--text-main)',
-                  border: isSelected ? `2.5px solid ${color}` : `1.5px solid ${color}66`,
-                  borderRadius: isRoot ? '20px' : '10px',
-                  padding: '6px 12px',
-                  boxShadow: isSelected ? `0 0 0 3px ${color}33, 0 4px 14px rgba(0,0,0,0.12)` : '0 2px 8px rgba(0,0,0,0.06)',
+                  border: isSelected ? `3px solid ${isRoot ? '#ffffff' : color}` : `2px solid ${color}88`,
+                  borderRadius: isRoot ? '24px' : '10px',
+                  padding: isRoot ? '8px 16px' : '6px 12px',
+                  boxShadow: isRoot
+                    ? `0 0 20px ${color}55, 0 6px 16px rgba(0,0,0,0.15)`
+                    : isSelected ? `0 0 0 3px ${color}33, 0 4px 14px rgba(0,0,0,0.12)` : '0 2px 8px rgba(0,0,0,0.06)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
