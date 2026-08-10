@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MindmapNode, mindmapToMarkdown, markdownToMindmap } from '../utils/mindmapParser';
+import type { MindmapNode } from '../utils/mindmapParser';
+import { mindmapToMarkdown, markdownToMindmap } from '../utils/mindmapParser';
 
 interface MindmapCanvasProps {
   initialMarkdown?: string;
