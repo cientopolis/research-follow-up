@@ -4,12 +4,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { MindmapCanvas } from './MindmapCanvas';
 
 describe('MindmapCanvas', () => {
-  it('renders root node and default initial branches', () => {
+  it('renders root node interactively', () => {
     render(<MindmapCanvas />);
 
-    expect(screen.getByText('Mapa Mental')).toBeDefined();
-    expect(screen.getByText('Rama Principal 1')).toBeDefined();
-    expect(screen.getByText('Rama Principal 2')).toBeDefined();
+    expect(screen.getByText('Idea Central / Nuevo Mapa')).toBeDefined();
   });
 
   it('renders initial custom markdown content', () => {
@@ -29,10 +27,10 @@ describe('MindmapCanvas', () => {
     render(<MindmapCanvas onChange={handleChange} />);
 
     // Double click root node to edit text
-    const rootEl = screen.getByText('Mapa Mental');
+    const rootEl = screen.getByText('Idea Central / Nuevo Mapa');
     fireEvent.doubleClick(rootEl);
 
-    const inputEl = screen.getByDisplayValue('Mapa Mental');
+    const inputEl = screen.getByDisplayValue('Idea Central / Nuevo Mapa');
     fireEvent.change(inputEl, { target: { value: 'Nuevo Título Mapa' } });
     fireEvent.blur(inputEl);
 

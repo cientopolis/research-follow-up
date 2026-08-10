@@ -186,17 +186,7 @@ SELECT ?s ?p ?o WHERE {
 
   // Mindmap Modal state
   const [showMindmapModal, setShowMindmapModal] = useState(false);
-  const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Mapa Mental de Investigación
-- Objetivos Principales <!-- color:#1e66f5 -->
-  - Publicación Journal Q1
-  - Prototipo Web React
-- Equipo y Recursos <!-- color:#16a34a -->
-  - Investigador Principal
-  - Tesistas de Grado / Posgrado
-- Metodología <!-- color:#ea580c -->
-  - Consultas SPARQL GraphDB
-  - Diseño de Grafos Semánticos
-`);
+  const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Idea Central / Nuevo Mapa`);
 
 
 

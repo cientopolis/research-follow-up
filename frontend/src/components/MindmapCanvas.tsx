@@ -41,11 +41,8 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
     }
     return {
       id: 'root',
-      text: 'Mapa Mental',
-      children: [
-        { id: 'n1', text: 'Rama Principal 1', children: [] },
-        { id: 'n2', text: 'Rama Principal 2', children: [] }
-      ]
+      text: 'Idea Central / Nuevo Mapa',
+      children: []
     };
   });
 
@@ -490,6 +487,43 @@ export function MindmapCanvas({ initialMarkdown, onChange, readOnly = false }: M
                     {node.folded ? '+' : '−'}
                   </button>
                 )}
+
+                {/* Quick Add Sub-branch "+" Button on Right Border */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const { newTree, newId } = addChildNode(root, node.id);
+                    setRoot(newTree);
+                    setSelectedId(newId);
+                    setEditingId(newId);
+                    setEditText('Nueva Rama');
+                    notifyChange(newTree);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '-12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    background: color,
+                    color: '#fff',
+                    border: '2px solid #fff',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: `0 2px 6px ${color}66`,
+                    zIndex: 5,
+                    lineHeight: 1
+                  }}
+                  title="Agregar subrama (Tab)"
+                >
+                  +
+                </button>
               </div>
             );
           })}
