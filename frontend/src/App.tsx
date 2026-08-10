@@ -18,6 +18,7 @@ interface RDFNode {
   status?: string;
   thesisType?: string;
   photoUrl?: string;
+  mindmapContent?: string;
 }
 
 interface RDFConnection {
@@ -187,6 +188,7 @@ SELECT ?s ?p ?o WHERE {
   // Mindmap Modal state
   const [showMindmapModal, setShowMindmapModal] = useState(false);
   const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Título`);
+  const [activeMindmapNode, setActiveMindmapNode] = useState<RDFNode | null>(null);
 
 
 
@@ -202,7 +204,7 @@ SELECT ?s ?p ?o WHERE {
       PREFIX ex: <http://example.org/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
-      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType WHERE {
+      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent WHERE {
         ?node rdf:type ?type .
         ?node rfu:createdBy <${userUri}> .
         ?node rdfs:label ?label .
@@ -210,6 +212,7 @@ SELECT ?s ?p ?o WHERE {
         OPTIONAL { ?node ex:posY ?y }
         OPTIONAL { ?node ex:status ?status }
         OPTIONAL { ?node ex:thesisType ?thesisType }
+        OPTIONAL { ?node rfu:hasMindmap ?mindmapContent }
         FILTER(STRSTARTS(STR(?node), "http://example.org/"))
       }
     `;
@@ -245,6 +248,7 @@ SELECT ?s ?p ?o WHERE {
                 nodeMap[uri].type = type; // Reemplazar genérico por específico
               }
             }
+            if (b.mindmapContent) nodeMap[uri].mindmapContent = b.mindmapContent.value;
             return;
           }
           
@@ -255,7 +259,8 @@ SELECT ?s ?p ?o WHERE {
             x: b.x ? parseFloat(b.x.value) : Math.random() * 400 + 100,
             y: b.y ? parseFloat(b.y.value) : Math.random() * 300 + 100,
             status: b.status ? b.status.value : undefined,
-            thesisType: b.thesisType ? b.thesisType.value : undefined
+            thesisType: b.thesisType ? b.thesisType.value : undefined,
+            mindmapContent: b.mindmapContent ? b.mindmapContent.value : undefined
           };
         });
 
@@ -647,6 +652,36 @@ SELECT ?s ?p ?o WHERE {
       }
     } catch (e) {
       console.error("Error saving properties", e);
+    }
+  };
+
+  const saveNodeMindmap = async (targetNode: RDFNode, markdownContent: string) => {
+    const escMarkdown = markdownContent.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+    const updateQuery = `
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      DELETE {
+        <${targetNode.uri}> rfu:hasMindmap ?m .
+      }
+      INSERT {
+        <${targetNode.uri}> rfu:hasMindmap "${escMarkdown}" .
+      }
+      WHERE {
+        OPTIONAL { <${targetNode.uri}> rfu:hasMindmap ?m }
+      }
+    `;
+
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: updateQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNodes(prev => prev.map(n => n.uri === targetNode.uri ? { ...n, mindmapContent: markdownContent } : n));
+      }
+    } catch (e) {
+      console.error('Error saving node mindmap:', e);
     }
   };
 
@@ -1554,6 +1589,27 @@ SELECT ?s ?p ?o WHERE {
                     title="Ver detalles / Configurar nodo"
                     style={{ color: chip.titleColor, fontSize: '0.95rem', padding: '2px', cursor: 'pointer', background: 'none', border: 'none' }}
                   >⚙️</button>
+                  {/* Mindmap trigger button (🧠) */}
+                  <button
+                    className="node-mindmap-btn"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMindmapNode(node);
+                      setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
+                      setShowMindmapModal(true);
+                    }}
+                    title={node.mindmapContent ? "Abrir Mapa Mental de este nodo" : "Crear Mapa Mental para este nodo"}
+                    style={{
+                      fontSize: '0.95rem',
+                      padding: '2px',
+                      cursor: 'pointer',
+                      background: 'none',
+                      border: 'none',
+                      opacity: node.mindmapContent ? 1 : 0.6,
+                      filter: node.mindmapContent ? 'drop-shadow(0 0 4px #1e66f5)' : 'none'
+                    }}
+                  >🧠</button>
                   {/* Avatar / Icon */}
                   <NodeAvatar
                     nodeType={nodeDomId}
@@ -1615,6 +1671,37 @@ SELECT ?s ?p ?o WHERE {
             <div className="window-body">
               {selectedNode && (
                 <>
+                  {/* Sección 3: Mapa Mental Asociado (rfu:hasMindmap) */}
+                  <div className="collapsible-section">
+                    <div
+                      className={`collapsible-header ${openSections.mindmap !== false ? 'open' : ''}`}
+                      onClick={() => setOpenSections({ ...openSections, mindmap: openSections.mindmap === false })}
+                    >
+                      <span>🧠 Mapa Mental (rfu:hasMindmap)</span>
+                      <span className="caret">▶</span>
+                    </div>
+                    {openSections.mindmap !== false && (
+                      <div className="collapsible-content">
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+                          Vinculá un mapa mental interactivo a este nodo utilizando la propiedad semántica <code>rfu:hasMindmap</code>.
+                        </p>
+                        <button
+                          className="btn btn-primary"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}
+                          onClick={() => {
+                            const target = selectedNode;
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                            setActiveMindmapNode(target);
+                            setMindmapMarkdown(target.mindmapContent || `# ${target.label}`);
+                            setShowMindmapModal(true);
+                          }}
+                        >
+                          🧠 {selectedNode.mindmapContent ? 'Editar Mapa Mental Asociado' : 'Crear Mapa Mental para este Nodo'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {/* Sección 1: Datos Básicos */}
                   <div className="collapsible-section">
                     <div 
@@ -2406,8 +2493,12 @@ SELECT ?s ?p ?o WHERE {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '1.4rem' }}>🧠</span>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Mapa Mental (FreeMind / Markdown)</h3>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Crea y organiza ramas libremente. Guardado en formato estándar Markdown.</span>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    {activeMindmapNode ? `Mapa Mental: ${activeMindmapNode.label}` : 'Mapa Mental (FreeMind / Markdown)'}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {activeMindmapNode ? `Vinculado al nodo via rfu:hasMindmap` : 'Crea y organiza ramas libremente. Guardado en formato estándar Markdown.'}
+                  </span>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -2418,7 +2509,7 @@ SELECT ?s ?p ?o WHERE {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'mapa-mental.md';
+                    a.download = activeMindmapNode ? `mapa-mental-${activeMindmapNode.label.toLowerCase().replace(/\s+/g, '-')}.md` : 'mapa-mental.md';
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
@@ -2442,7 +2533,12 @@ SELECT ?s ?p ?o WHERE {
                         const reader = new FileReader();
                         reader.onload = (evt) => {
                           const text = evt.target?.result as string;
-                          if (text) setMindmapMarkdown(text);
+                          if (text) {
+                            setMindmapMarkdown(text);
+                            if (activeMindmapNode) {
+                              saveNodeMindmap(activeMindmapNode, text);
+                            }
+                          }
                         };
                         reader.readAsText(file);
                       }
@@ -2452,7 +2548,10 @@ SELECT ?s ?p ?o WHERE {
                 </label>
                 <button
                   className="btn btn-primary"
-                  onClick={() => setShowMindmapModal(false)}
+                  onClick={() => {
+                    setShowMindmapModal(false);
+                    setActiveMindmapNode(null);
+                  }}
                 >
                   Cerrar
                 </button>
@@ -2463,7 +2562,12 @@ SELECT ?s ?p ?o WHERE {
             <div style={{ flex: 1, position: 'relative' }}>
               <MindmapCanvas
                 initialMarkdown={mindmapMarkdown}
-                onChange={(md) => setMindmapMarkdown(md)}
+                onChange={(md) => {
+                  setMindmapMarkdown(md);
+                  if (activeMindmapNode) {
+                    saveNodeMindmap(activeMindmapNode, md);
+                  }
+                }}
               />
             </div>
           </div>
