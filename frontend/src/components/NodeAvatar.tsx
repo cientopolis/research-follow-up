@@ -12,6 +12,13 @@ import {
   Hexagon,
   Brain,
   UserCheck,
+  PencilSimple,
+  BookBookmark,
+  FolderSimple,
+  Image,
+  Table,
+  File,
+  CalendarBlank,
 } from '@phosphor-icons/react';
 
 export interface NodeAvatarProps {
@@ -55,14 +62,21 @@ function getPhosphorIcon(name: string): PhosphorIcon | null {
 function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size: number; color: string }) {
   const props = { size: Math.round(size * 0.58), color, weight: 'duotone' as const };
   switch (nodeType) {
-    case 'nodeProyecto':       return <Briefcase   {...props} />;
-    case 'nodePaper':          return <FileText     {...props} />;
-    case 'nodeTesisDoctoral':  return <Medal        {...props} />;
-    case 'nodeTesisMaestria':  return <Certificate  {...props} />;
-    case 'nodeTopicCSO':       return <Tag          {...props} />;
-    case 'nodeMindmap':        return <Brain        {...props} />;
-    case 'nodeRol':            return <UserCheck    {...props} />;
-    default:                   return <Hexagon      {...props} />;
+    case 'nodeProyecto':       return <Briefcase     {...props} />;
+    case 'nodePaper':          return <FileText       {...props} />;
+    case 'nodePaperEscribir':  return <PencilSimple   {...props} />;
+    case 'nodePaperReferencia':return <BookBookmark   {...props} />;
+    case 'nodeCarpetaNube':    return <FolderSimple   {...props} />;
+    case 'nodeDiagrama':       return <Image          {...props} />;
+    case 'nodeTabla':          return <Table          {...props} />;
+    case 'nodeArchivo':        return <File           {...props} />;
+    case 'nodeReunion':        return <CalendarBlank  {...props} />;
+    case 'nodeTesisDoctoral':  return <Medal          {...props} />;
+    case 'nodeTesisMaestria':  return <Certificate    {...props} />;
+    case 'nodeTopicCSO':       return <Tag            {...props} />;
+    case 'nodeMindmap':        return <Brain          {...props} />;
+    case 'nodeRol':            return <UserCheck      {...props} />;
+    default:                   return <Hexagon        {...props} />;
   }
 }
 

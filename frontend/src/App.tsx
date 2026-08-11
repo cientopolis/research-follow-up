@@ -20,6 +20,7 @@ interface RDFNode {
   thesisType?: string;
   photoUrl?: string;
   mindmapContent?: string;
+  externalUrl?: string;
 }
 
 interface RDFConnection {
@@ -61,6 +62,32 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   'Thesis': [
     { uri: 'http://purl.org/ontology/bibo/degree', label: 'Grado Académico (bibo:degree)' },
     { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' }
+  ],
+  'DocumentDraft': [
+    { uri: 'http://schema.org/url', label: 'URL Externa / Sitio (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/status', label: 'Estado (ej. En borrador, En revisión)' }
+  ],
+  'AcademicArticle': [
+    { uri: 'http://schema.org/url', label: 'URL Externa / Referencia (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
+    { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' }
+  ],
+  'Folder': [
+    { uri: 'http://schema.org/url', label: 'URL Carpeta Nube (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/description', label: 'Descripción / Proveedor' }
+  ],
+  'ImageObject': [
+    { uri: 'http://schema.org/url', label: 'URL Diagrama / Imagen (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' }
+  ],
+  'Dataset': [
+    { uri: 'http://schema.org/url', label: 'URL Tabla / Datos (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' }
+  ],
+  'MediaObject': [
+    { uri: 'http://schema.org/url', label: 'URL Archivo Externo (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' }
+  ],
+  'Meeting': [
+    { uri: 'http://schema.org/url', label: 'URL Minutas / Reunión (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
   ]
 };
 
@@ -208,7 +235,10 @@ SELECT ?s ?p ?o WHERE {
       PREFIX ex: <http://example.org/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
-      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent WHERE {
+      PREFIX schema: <http://schema.org/>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl WHERE {
         ?node rdf:type ?type .
         ?node rfu:createdBy <${userUri}> .
         ?node rdfs:label ?label .
@@ -217,6 +247,13 @@ SELECT ?s ?p ?o WHERE {
         OPTIONAL { ?node ex:status ?status }
         OPTIONAL { ?node ex:thesisType ?thesisType }
         OPTIONAL { ?node rfu:hasMindmap ?mindmapContent }
+        OPTIONAL { 
+          ?node schema:url ?url1 .
+        }
+        OPTIONAL {
+          ?node foaf:page ?url2 .
+        }
+        BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
         FILTER(STRSTARTS(STR(?node), "http://example.org/"))
       }
     `;
@@ -253,6 +290,7 @@ SELECT ?s ?p ?o WHERE {
               }
             }
             if (b.mindmapContent) nodeMap[uri].mindmapContent = b.mindmapContent.value;
+            if (b.externalUrl) nodeMap[uri].externalUrl = b.externalUrl.value;
             return;
           }
           
@@ -264,7 +302,8 @@ SELECT ?s ?p ?o WHERE {
             y: b.y ? parseFloat(b.y.value) : Math.random() * 300 + 100,
             status: b.status ? b.status.value : undefined,
             thesisType: b.thesisType ? b.thesisType.value : undefined,
-            mindmapContent: b.mindmapContent ? b.mindmapContent.value : undefined
+            mindmapContent: b.mindmapContent ? b.mindmapContent.value : undefined,
+            externalUrl: b.externalUrl ? b.externalUrl.value : undefined
           };
         });
 
@@ -1154,7 +1193,14 @@ SELECT ?s ?p ?o WHERE {
     if (typeURI.includes('GraduateStudent')) return 'Estudiante de posgrado';
     if (typeURI.includes('UndergraduateStudent')) return 'Estudiante de grado';
     if (typeURI.includes('Project')) return 'Proyecto';
+    if (typeURI.includes('DocumentDraft')) return 'Paper a escribir';
+    if (typeURI.includes('AcademicArticle')) return 'Paper referencia';
     if (typeURI.includes('Article') || typeURI.includes('Publication')) return 'Paper';
+    if (typeURI.includes('Folder')) return 'Carpeta en Nube';
+    if (typeURI.includes('ImageObject')) return 'Diagrama';
+    if (typeURI.includes('Dataset')) return 'Tabla / Datos';
+    if (typeURI.includes('MediaObject')) return 'Archivo';
+    if (typeURI.includes('Meeting')) return 'Reunión / Minuta';
     if (typeURI.includes('Topic')) return 'Tópico CSO';
     if (typeURI.includes('Thesis')) {
       if (thesisType === 'PhD Thesis') return 'Tesis Doctoral';
@@ -1172,12 +1218,19 @@ SELECT ?s ?p ?o WHERE {
     if (type.includes('GraduateStudent')) return 'nodeTesistaPosgrado';
     if (type.includes('UndergraduateStudent')) return 'nodeTesistaDeGrado';
     if (type.includes('Project')) return 'nodeProyecto';
+    if (type.includes('DocumentDraft')) return 'nodePaperEscribir';
+    if (type.includes('AcademicArticle')) return 'nodePaperReferencia';
+    if (type.includes('Folder')) return 'nodeCarpetaNube';
+    if (type.includes('ImageObject')) return 'nodeDiagrama';
+    if (type.includes('Dataset')) return 'nodeTabla';
+    if (type.includes('MediaObject')) return 'nodeArchivo';
+    if (type.includes('Meeting')) return 'nodeReunion';
     if (type.includes('Thesis')) {
       if (thesisType === 'PhD Thesis') return 'nodeTesisDoctoral';
       if (thesisType === 'Magister') return 'nodeTesisMaestria';
       return 'nodePaper';
     }
-    if (type.includes('InformationResource') || type.includes('AcademicArticle') || type.includes('Article') || type.includes('Publication')) return 'nodePaper';
+    if (type.includes('InformationResource') || type.includes('Article') || type.includes('Publication')) return 'nodePaper';
     if (type.includes('Topic')) return 'nodeTopicCSO';
     return 'nodeCard';
   };
@@ -1624,6 +1677,13 @@ SELECT ?s ?p ?o WHERE {
               nodeTopicCSO:       { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0d9488', titleColor: '#134e4a', tagBg: 'rgba(13,148,136,0.15)',  tagColor: '#134e4a' },
               nodeMindmap:        { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#4f46e5', titleColor: '#312e81', tagBg: 'rgba(79,70,229,0.15)',   tagColor: '#312e81' },
               nodeRol:            { bg: 'rgba(254, 243, 199, 0.95)', chipColor: '#d97706', titleColor: '#78350f', tagBg: 'rgba(217,119,6,0.15)',   tagColor: '#78350f' },
+              nodePaperEscribir:  { bg: 'rgba(254, 243, 199, 0.95)', chipColor: '#b45309', titleColor: '#78350f', tagBg: 'rgba(180,83,9,0.15)',    tagColor: '#78350f' },
+              nodePaperReferencia:{ bg: 'rgba(243, 232, 255, 0.95)', chipColor: '#9333ea', titleColor: '#581c87', tagBg: 'rgba(147,51,234,0.15)',   tagColor: '#581c87' },
+              nodeCarpetaNube:    { bg: 'rgba(224, 242, 254, 0.95)', chipColor: '#0284c7', titleColor: '#075985', tagBg: 'rgba(2,132,199,0.15)',    tagColor: '#075985' },
+              nodeDiagrama:       { bg: 'rgba(252, 231, 243, 0.95)', chipColor: '#db2777', titleColor: '#831843', tagBg: 'rgba(219,39,119,0.15)',   tagColor: '#831843' },
+              nodeTabla:          { bg: 'rgba(236, 253, 245, 0.95)', chipColor: '#059669', titleColor: '#064e3b', tagBg: 'rgba(5,150,105,0.15)',   tagColor: '#064e3b' },
+              nodeArchivo:        { bg: 'rgba(241, 245, 249, 0.95)', chipColor: '#475569', titleColor: '#0f172a', tagBg: 'rgba(71,85,105,0.15)',   tagColor: '#0f172a' },
+              nodeReunion:        { bg: 'rgba(254, 226, 226, 0.95)', chipColor: '#e11d48', titleColor: '#881337', tagBg: 'rgba(225,29,72,0.15)',   tagColor: '#881337' },
             };
             const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
 
@@ -1788,6 +1848,36 @@ SELECT ?s ?p ?o WHERE {
                 <p style={{ margin: 0, fontSize: '0.62rem', color: chip.titleColor, opacity: 0.45, lineHeight: 1.2 }}>
                   {getCleanLabel(node.uri)}
                 </p>
+
+                {/* External URL Button */}
+                {node.externalUrl && (
+                  <a
+                    href={node.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      marginTop: '6px',
+                      padding: '4px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      color: chip.chipColor,
+                      background: 'rgba(255,255,255,0.75)',
+                      border: `1px solid ${chip.chipColor}44`,
+                      borderRadius: '6px',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title={`Abrir sitio alojado: ${node.externalUrl}`}
+                  >
+                    🔗 Abrir sitio externo
+                  </a>
+                )}
 
                 {/* Mindmap specific trigger button */}
                 {node.type.includes('Mindmap') && (
@@ -2308,7 +2398,14 @@ SELECT ?s ?p ?o WHERE {
                 <option value="http://vivoweb.org/ontology/core#GraduateStudent">Tesista de Posgrado (vivo:GraduateStudent)</option>
                 <option value="http://vivoweb.org/ontology/core#UndergraduateStudent">Tesista de Grado (vivo:UndergraduateStudent)</option>
                 <option value="http://vivoweb.org/ontology/core#Project">Proyecto (vivo:Project)</option>
+                <option value="http://purl.org/ontology/bibo/DocumentDraft">📝 Paper a escribir (bibo:DocumentDraft)</option>
+                <option value="http://purl.org/ontology/bibo/AcademicArticle">📚 Paper ya escrito / Referencia (bibo:AcademicArticle)</option>
                 <option value="https://dblp.org/rdf/schema#Article">Paper (dblp:Article)</option>
+                <option value="http://schema.org/Folder">📁 Carpeta en la nube (schema:Folder)</option>
+                <option value="http://schema.org/ImageObject">📊 Diagrama (schema:ImageObject)</option>
+                <option value="http://schema.org/Dataset">📋 Tabla / Datos (schema:Dataset)</option>
+                <option value="http://schema.org/MediaObject">📄 Archivo (schema:MediaObject)</option>
+                <option value="http://vivoweb.org/ontology/core#Meeting">📅 Reunión / Minutas (vivo:Meeting)</option>
                 <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#PhD">Tesis Doctoral (PhD Thesis)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#Master">Tesis de Maestría (Magister)</option>
