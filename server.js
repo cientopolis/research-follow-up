@@ -48,6 +48,24 @@ const checkAuth = async (req, res, next) => {
   }
 };
 
+// SuperAdmin Middleware (Checks custom claim `admin: true` OR `superadmin: true` OR email fallback)
+const checkSuperAdmin = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Acceso no autorizado.' });
+  }
+  const isSuperAdminClaim = req.user.admin === true || req.user.superadmin === true;
+  const isSuperAdminEmail = req.user.email && (
+    req.user.email === 'admin@cientopolis.org' ||
+    req.user.email.startsWith('superadmin@') ||
+    req.user.email.startsWith('admin@')
+  );
+
+  if (isSuperAdminClaim || isSuperAdminEmail) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de Super Usuario.' });
+};
+
 // Configurar cabeceras de autenticación para GraphDB
 const getGraphDBHeaders = (contentType = 'application/json') => {
   const headers = {
@@ -133,6 +151,75 @@ app.post('/api/sparql', checkAuth, async (req, res) => {
       error: 'Error al conectar con la base de datos GraphDB',
       details: error.message
     });
+  }
+});
+
+// ==================================================
+// SUPER ADMIN MANAGEMENT ENDPOINTS
+// ==================================================
+
+// 1. Obtener lista de todos los usuarios
+app.get('/api/admin/users', checkAuth, checkSuperAdmin, async (req, res) => {
+  try {
+    const listUsersResult = await getAuth().listUsers(1000);
+    const users = listUsersResult.users.map(u => ({
+      uid: u.uid,
+      email: u.email,
+      disabled: u.disabled,
+      customClaims: u.customClaims || {},
+      metadata: u.metadata
+    }));
+    return res.json({ users });
+  } catch (error) {
+    console.error('[Admin API] Error al listar usuarios:', error);
+    return res.status(500).json({ error: 'Error al obtener usuarios', details: error.message });
+  }
+});
+
+// 2. Eliminar un usuario por UID
+app.delete('/api/admin/users/:uid', checkAuth, checkSuperAdmin, async (req, res) => {
+  const { uid } = req.params;
+  try {
+    if (req.user.uid === uid) {
+      return res.status(400).json({ error: 'No podés eliminar tu propia cuenta de Super Usuario activa.' });
+    }
+    await getAuth().deleteUser(uid);
+    return res.json({ success: true, message: `Usuario ${uid} eliminado correctamente.` });
+  } catch (error) {
+    console.error(`[Admin API] Error al eliminar usuario ${uid}:`, error);
+    return res.status(500).json({ error: 'Error al eliminar usuario', details: error.message });
+  }
+});
+
+// 3. Blanquear / Resetear contraseña de un usuario
+app.post('/api/admin/users/:uid/reset-password', checkAuth, checkSuperAdmin, async (req, res) => {
+  const { uid } = req.params;
+  const { newPassword } = req.body;
+  
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+  }
+
+  try {
+    await getAuth().updateUser(uid, { password: newPassword });
+    return res.json({ success: true, message: `Contraseña blanqueada con éxito para el usuario.` });
+  } catch (error) {
+    console.error(`[Admin API] Error al blanquear contraseña de usuario ${uid}:`, error);
+    return res.status(500).json({ error: 'Error al blanquear contraseña', details: error.message });
+  }
+});
+
+// 4. Asignar / Quitar rol de SuperAdmin (Custom Claim)
+app.post('/api/admin/users/:uid/role', checkAuth, checkSuperAdmin, async (req, res) => {
+  const { uid } = req.params;
+  const { isAdmin } = req.body;
+
+  try {
+    await getAuth().setCustomUserClaims(uid, { admin: !!isAdmin, superadmin: !!isAdmin });
+    return res.json({ success: true, message: `Rol actualizado correctamente.` });
+  } catch (error) {
+    console.error(`[Admin API] Error al actualizar rol de usuario ${uid}:`, error);
+    return res.status(500).json({ error: 'Error al actualizar rol', details: error.message });
   }
 });
 

@@ -8,6 +8,7 @@ import { NodeAvatar } from './components/NodeAvatar';
 import { IconPicker } from './components/IconPicker';
 import { AvatarPicker } from './components/AvatarPicker';
 import { MindmapCanvas } from './components/MindmapCanvas';
+import { AdminUsersModal } from './components/AdminUsersModal';
 
 interface RDFNode {
   uri: string;
@@ -189,6 +190,9 @@ SELECT ?s ?p ?o WHERE {
   const [showMindmapModal, setShowMindmapModal] = useState(false);
   const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Título`);
   const [activeMindmapNode, setActiveMindmapNode] = useState<RDFNode | null>(null);
+
+  // SuperAdmin User Management Modal state
+  const [showAdminModal, setShowAdminModal] = useState(false);
 
 
 
@@ -1260,6 +1264,30 @@ SELECT ?s ?p ?o WHERE {
                   }}
                 >
                   ⚙️ Configuración General
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setShowAdminModal(true);
+                    setIsUserMenuOpen(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-main)',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  👑 Gestión de Usuarios (Admin)
                 </button>
 
                 <button 
@@ -2602,6 +2630,13 @@ SELECT ?s ?p ?o WHERE {
         </div>
       )}
 
+      {/* SuperAdmin User Management Modal */}
+      <AdminUsersModal
+        isOpen={showAdminModal}
+        onClose={() => setShowAdminModal(false)}
+        fetchWithAuth={fetchWithAuth}
+        currentUid={user.uid}
+      />
 
       </div>
     </div>
