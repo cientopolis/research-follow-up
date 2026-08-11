@@ -1935,37 +1935,6 @@ SELECT ?s ?p ?o WHERE {
             <div className="window-body">
               {selectedNode && (
                 <>
-                  {/* Sección 3: Mapa Mental Asociado (rfu:hasMindmap) */}
-                  <div className="collapsible-section">
-                    <div
-                      className={`collapsible-header ${openSections.mindmap !== false ? 'open' : ''}`}
-                      onClick={() => setOpenSections({ ...openSections, mindmap: openSections.mindmap === false })}
-                    >
-                      <span>🧠 Mapa Mental (rfu:hasMindmap)</span>
-                      <span className="caret">▶</span>
-                    </div>
-                    {openSections.mindmap !== false && (
-                      <div className="collapsible-content">
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
-                          Vinculá un mapa mental interactivo a este nodo utilizando la propiedad semántica <code>rfu:hasMindmap</code>.
-                        </p>
-                        <button
-                          className="btn btn-primary"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}
-                          onClick={() => {
-                            const target = selectedNode;
-                            setSelectedNode(null);
-                            setIsInspectorOpen(false);
-                            setActiveMindmapNode(target);
-                            setMindmapMarkdown(target.mindmapContent || `# ${target.label}`);
-                            setShowMindmapModal(true);
-                          }}
-                        >
-                          🧠 {selectedNode.mindmapContent ? 'Editar Mapa Mental Asociado' : 'Crear Mapa Mental para este Nodo'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
                   {/* Sección 1: Datos Básicos */}
                   <div className="collapsible-section">
                     <div 
