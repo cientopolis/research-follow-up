@@ -1682,29 +1682,29 @@ SELECT ?s ?p ?o WHERE {
             const isSelf = node.uri === associatedResearcher;
             const nodeDomId = getNodeComponentId(node.type, node.thesisType);
 
-            // Tinted Chips palette — guaranteed inline so CSS specificity never interferes
+            // Tinted Chips palette — Harmonized with DireAtento Brand Palette (Azul Noche, Cobre Cálido, Verde Menta)
             const chipPalette: Record<string, { bg: string; chipColor: string; titleColor: string; tagBg: string; tagColor: string }> = {
-              nodeInvestigador:   { bg: 'rgba(219, 234, 254, 0.9)',  chipColor: '#1e66f5', titleColor: '#1e3a8a', tagBg: 'rgba(30,102,245,0.15)',  tagColor: '#1e3a8a' },
-              nodeTesistaPosgrado:{ bg: 'rgba(209, 250, 229, 0.9)',  chipColor: '#16a34a', titleColor: '#14532d', tagBg: 'rgba(22,163,74,0.15)',   tagColor: '#14532d' },
-              nodeTesistaDeGrado: { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0891b2', titleColor: '#164e63', tagBg: 'rgba(8,145,178,0.15)',   tagColor: '#164e63' },
-              nodeProyecto:       { bg: 'rgba(254, 226, 226, 0.9)',  chipColor: '#dc2626', titleColor: '#7f1d1d', tagBg: 'rgba(220,38,38,0.15)',   tagColor: '#7f1d1d' },
-              nodePaper:          { bg: 'rgba(237, 233, 254, 0.9)',  chipColor: '#7c3aed', titleColor: '#4c1d95', tagBg: 'rgba(124,58,237,0.15)',  tagColor: '#4c1d95' },
-              nodeTesisDoctoral:  { bg: 'rgba(255, 237, 213, 0.9)',  chipColor: '#ea580c', titleColor: '#7c2d12', tagBg: 'rgba(234,88,12,0.15)',   tagColor: '#7c2d12' },
-              nodeTesisMaestria:  { bg: 'rgba(254, 249, 195, 0.9)',  chipColor: '#ca8a04', titleColor: '#713f12', tagBg: 'rgba(202,138,4,0.15)',   tagColor: '#713f12' },
-              nodeTopicCSO:       { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0d9488', titleColor: '#134e4a', tagBg: 'rgba(13,148,136,0.15)',  tagColor: '#134e4a' },
-              nodeMindmap:        { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#4f46e5', titleColor: '#312e81', tagBg: 'rgba(79,70,229,0.15)',   tagColor: '#312e81' },
-              nodeRol:            { bg: 'rgba(254, 243, 199, 0.95)', chipColor: '#d97706', titleColor: '#78350f', tagBg: 'rgba(217,119,6,0.15)',   tagColor: '#78350f' },
-              nodePaperEscribir:  { bg: 'rgba(254, 243, 199, 0.95)', chipColor: '#b45309', titleColor: '#78350f', tagBg: 'rgba(180,83,9,0.15)',    tagColor: '#78350f' },
-              nodePaperReferencia:{ bg: 'rgba(243, 232, 255, 0.95)', chipColor: '#9333ea', titleColor: '#581c87', tagBg: 'rgba(147,51,234,0.15)',   tagColor: '#581c87' },
-              nodeCarpetaNube:    { bg: 'rgba(224, 242, 254, 0.95)', chipColor: '#0284c7', titleColor: '#075985', tagBg: 'rgba(2,132,199,0.15)',    tagColor: '#075985' },
-              nodeDiagrama:       { bg: 'rgba(252, 231, 243, 0.95)', chipColor: '#db2777', titleColor: '#831843', tagBg: 'rgba(219,39,119,0.15)',   tagColor: '#831843' },
-              nodeTabla:          { bg: 'rgba(236, 253, 245, 0.95)', chipColor: '#059669', titleColor: '#064e3b', tagBg: 'rgba(5,150,105,0.15)',   tagColor: '#064e3b' },
-              nodeArchivo:        { bg: 'rgba(241, 245, 249, 0.95)', chipColor: '#475569', titleColor: '#0f172a', tagBg: 'rgba(71,85,105,0.15)',   tagColor: '#0f172a' },
-              nodeReunion:        { bg: 'rgba(254, 226, 226, 0.95)', chipColor: '#e11d48', titleColor: '#881337', tagBg: 'rgba(225,29,72,0.15)',   tagColor: '#881337' },
-              nodeConferencia:    { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#6366f1', titleColor: '#312e81', tagBg: 'rgba(99,102,241,0.15)',  tagColor: '#312e81' },
-              nodeRevista:        { bg: 'rgba(245, 243, 255, 0.95)', chipColor: '#8b5cf6', titleColor: '#4c1d95', tagBg: 'rgba(139,92,246,0.15)',  tagColor: '#4c1d95' },
+              nodeInvestigador:   { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
+              nodeTesistaPosgrado:{ bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodeTesistaDeGrado: { bg: 'rgba(240, 253, 248, 0.95)', chipColor: '#2D8A75', titleColor: '#1B5346', tagBg: 'rgba(163,217,201,0.25)',tagColor: '#1B5346' },
+              nodeProyecto:       { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodePaper:          { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
+              nodeTesisDoctoral:  { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodeTesisMaestria:  { bg: 'rgba(240, 253, 248, 0.95)', chipColor: '#2D8A75', titleColor: '#1B5346', tagBg: 'rgba(163,217,201,0.25)',tagColor: '#1B5346' },
+              nodeTopicCSO:       { bg: 'rgba(240, 253, 248, 0.95)', chipColor: '#2D8A75', titleColor: '#1B5346', tagBg: 'rgba(163,217,201,0.25)',tagColor: '#1B5346' },
+              nodeMindmap:        { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
+              nodeRol:            { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodePaperEscribir:  { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodePaperReferencia:{ bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
+              nodeCarpetaNube:    { bg: 'rgba(240, 253, 248, 0.95)', chipColor: '#2D8A75', titleColor: '#1B5346', tagBg: 'rgba(163,217,201,0.25)',tagColor: '#1B5346' },
+              nodeDiagrama:       { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodeTabla:          { bg: 'rgba(240, 253, 248, 0.95)', chipColor: '#2D8A75', titleColor: '#1B5346', tagBg: 'rgba(163,217,201,0.25)',tagColor: '#1B5346' },
+              nodeArchivo:        { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#4A5568', titleColor: '#1A2B48', tagBg: 'rgba(74,85,104,0.12)',   tagColor: '#1A2B48' },
+              nodeReunion:        { bg: 'rgba(254, 243, 235, 0.95)', chipColor: '#C17F59', titleColor: '#7C4324', tagBg: 'rgba(193,127,89,0.15)', tagColor: '#7C4324' },
+              nodeConferencia:    { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
+              nodeRevista:        { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
             };
-            const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
+            const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(237,242,247,0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)', tagColor: '#1A2B48' };
 
             return (
               <div
