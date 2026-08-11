@@ -189,7 +189,7 @@ export default function App() {
   const [isConnectingMode, setIsConnectingMode] = useState(false);
   const [connectSourceNode, setConnectSourceNode] = useState<string | null>(null);
   const [showNewNodeModal, setShowNewNodeModal] = useState(false);
-  const [newNodeData, setNewNodeData] = useState({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '' });
+  const [newNodeData, setNewNodeData] = useState({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '', externalUrl: '' });
 
   // Quick-connect flow: "+" button on node edge
   const [quickConnectSourceUri, setQuickConnectSourceUri] = useState<string | null>(null);
@@ -930,11 +930,16 @@ SELECT ?s ?p ?o WHERE {
       extraTriples = `<${uri}> <http://example.org/resource/thesisType> "Magister" .`;
     }
 
+    if (newNodeData.externalUrl && newNodeData.externalUrl.trim()) {
+      extraTriples += `\n<${uri}> <http://schema.org/url> <${newNodeData.externalUrl.trim()}> .`;
+    }
+
     const insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX ex: <http://example.org/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
+      PREFIX schema: <http://schema.org/>
       
       INSERT DATA {
         <${uri}> rdf:type <${finalType}> ;
@@ -955,7 +960,7 @@ SELECT ?s ?p ?o WHERE {
       const data = await res.json();
       if (data.success) {
         setShowNewNodeModal(false);
-        setNewNodeData({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '' });
+        setNewNodeData({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '', externalUrl: '' });
         await fetchGraphData();
         // If this was a quick-connect action, open relation picker
         if (quickConnectSourceUri) {
@@ -2415,6 +2420,18 @@ SELECT ?s ?p ?o WHERE {
             <div className="form-group">
               <label>Sufijo de URI</label>
               <input type="text" placeholder="Ej: JuanPerez" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                🔗 URL Externa / Sitio Alojado
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>(Overleaf, Google Docs, Drive, etc.)</span>
+              </label>
+              <input
+                type="url"
+                placeholder="Ej: https://overleaf.com/read/xxxx"
+                value={newNodeData.externalUrl}
+                onChange={(e) => setNewNodeData({ ...newNodeData, externalUrl: e.target.value })}
+              />
             </div>
             <div className="flex-row flex-space" style={{ marginTop: '10px' }}>
               <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
