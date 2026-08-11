@@ -1694,6 +1694,48 @@ SELECT ?s ?p ?o WHERE {
                   }}
                   className="node-quick-connect-btn"
                 >+</button>
+
+                {/* Connect with existing node button */}
+                <button
+                  title="Vincular con un nodo existente en el lienzo"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const otherNodes = nodes.filter(n => n.uri !== node.uri);
+                    if (otherNodes.length === 0) {
+                      alert('No hay otros nodos en el lienzo para conectar.');
+                      return;
+                    }
+                    setQuickConnectSourceUri(node.uri);
+                    setPendingConnectionTarget(otherNodes[0].uri);
+                    setSelectedRelationPredicate('http://vivoweb.org/ontology/core#relatedBy');
+                    setShowRelationModal(true);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '-14px',
+                    top: '18%',
+                    transform: 'translateY(-50%)',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: 'var(--bg-surface)',
+                    color: chip.chipColor,
+                    border: `2px solid ${chip.chipColor}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    boxShadow: `0 2px 8px rgba(0,0,0,0.1)`,
+                    zIndex: 20,
+                    opacity: 0,
+                    transition: 'opacity 0.15s ease, transform 0.15s ease',
+                  }}
+                  className="node-quick-connect-btn"
+                >🔗</button>
                 {isDev && <span className="dev-tag-badge">#{nodeDomId}</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {/* Inspector / Details Gear Icon (Left side) */}
@@ -2307,15 +2349,28 @@ SELECT ?s ?p ?o WHERE {
               }}>✕</button>
             </div>
 
-            {/* Node pair summary */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(0,0,0,0.04)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
-              <span style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nodes.find(n => n.uri === quickConnectSourceUri)?.label || '…'}
-              </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nodes.find(n => n.uri === pendingConnectionTarget)?.label || pendingConnectionTarget.split('/').pop()}
-              </span>
+            {/* Node pair summary / Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(0,0,0,0.04)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Origen:</span>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  {nodes.find(n => n.uri === quickConnectSourceUri)?.label || '…'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Destino:</label>
+                <select
+                  value={pendingConnectionTarget}
+                  onChange={(e) => setPendingConnectionTarget(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.82rem' }}
+                >
+                  {nodes.filter(n => n.uri !== quickConnectSourceUri).map(n => (
+                    <option key={n.uri} value={n.uri}>
+                      {n.label} ({getCleanType(n.type, n.thesisType)})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="form-group">
