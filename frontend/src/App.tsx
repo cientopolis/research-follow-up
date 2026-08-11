@@ -2141,10 +2141,11 @@ SELECT ?s ?p ?o WHERE {
                         {/* Renderizar otras propiedades personalizadas asignadas */}
                         {Object.entries(nodeDetails)
                           .filter(([uri]) => {
-                            // Ocultar labels, status predefinidos, o propiedades sugeridas fijas
+                            // Ocultar labels, status predefinidos, posiciones (ex:posX / ex:posY), o propiedades sugeridas fijas
                             const isLabel = uri === 'http://www.w3.org/2000/01/rdf-schema#label';
+                            const isPosition = uri === 'http://example.org/resource/posX' || uri === 'http://example.org/resource/posY';
                             const isPredefined = getPredefinedProperties(selectedNode.type).some(p => p.uri === uri);
-                            return !isLabel && !isPredefined;
+                            return !isLabel && !isPosition && !isPredefined;
                           })
                           .map(([uri, val]) => (
                             <div className="form-group" key={uri}>
