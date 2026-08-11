@@ -1280,26 +1280,6 @@ SELECT ?s ?p ?o WHERE {
             {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
             <button className="btn btn-primary" onClick={() => setShowNewNodeModal(true)}>+ Agregar Nodo</button>
           </div>
-
-          <div style={{ position: 'relative' }}>
-            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnConectarNodos</span>}
-            <button 
-              className={`btn ${isConnectingMode ? 'btn-primary' : ''}`}
-              onClick={() => {
-                setIsConnectingMode(!isConnectingMode);
-                setConnectSourceNode(null);
-              }}
-            >
-              {isConnectingMode ? 'Conectando...' : 'Conectar Nodos'}
-            </button>
-          </div>
-
-          <div style={{ position: 'relative' }}>
-            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnMindmap</span>}
-            <button className="btn" onClick={() => setShowMindmapModal(true)} style={{ background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed', borderColor: 'rgba(124, 58, 237, 0.3)' }}>
-              🧠 Mapa Mental
-            </button>
-          </div>
           
           {nodes.length === 0 && (
             <button className="btn" onClick={loadSeedData}>Cargar Semilla Inicial</button>
