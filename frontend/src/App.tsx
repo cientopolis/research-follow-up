@@ -2466,6 +2466,7 @@ SELECT ?s ?p ?o WHERE {
                 style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.85rem', width: '100%' }}
               >
                 <optgroup label="Publicaciones y Venues (Conferencias / Revistas)">
+                  <option value="http://vivoweb.org/ontology/core#hasPublicationVenue">vivo:hasPublicationVenue — Venue / Lugar oficial en la ontología VIVO</option>
                   <option value="http://vivoweb.org/ontology/core#publicationVenue">vivo:publicationVenue — Venue / Lugar de publicación planificado u oficial</option>
                   <option value="http://purl.org/ontology/bibo/presentedAt">bibo:presentedAt — Presentado o a presentar en conferencia</option>
                   <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado o a enviar en revista/conferencia</option>
