@@ -11,6 +11,7 @@ import {
   Tag,
   Hexagon,
   Brain,
+  UserCheck,
 } from '@phosphor-icons/react';
 
 export interface NodeAvatarProps {
@@ -60,6 +61,7 @@ function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size:
     case 'nodeTesisMaestria':  return <Certificate  {...props} />;
     case 'nodeTopicCSO':       return <Tag          {...props} />;
     case 'nodeMindmap':        return <Brain        {...props} />;
+    case 'nodeRol':            return <UserCheck    {...props} />;
     default:                   return <Hexagon      {...props} />;
   }
 }

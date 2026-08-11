@@ -1148,6 +1148,8 @@ SELECT ?s ?p ?o WHERE {
 
   const getCleanType = (typeURI: string, thesisType?: string) => {
     if (typeURI.includes('Mindmap')) return 'Mapa Mental';
+    if (typeURI.includes('PrincipalInvestigatorRole')) return 'Rol de Inv. Principal';
+    if (typeURI.includes('MemberRole') || typeURI.includes('Role')) return 'Rol de Miembro';
     if (typeURI.includes('FacultyMember')) return 'Investigador';
     if (typeURI.includes('GraduateStudent')) return 'Estudiante de posgrado';
     if (typeURI.includes('UndergraduateStudent')) return 'Estudiante de grado';
@@ -1165,6 +1167,7 @@ SELECT ?s ?p ?o WHERE {
   // Helper selector helper mapping component styles
   const getNodeComponentId = (type: string, thesisType?: string) => {
     if (type.includes('Mindmap')) return 'nodeMindmap';
+    if (type.includes('Role')) return 'nodeRol';
     if (type.includes('FacultyMember')) return 'nodeInvestigador';
     if (type.includes('GraduateStudent')) return 'nodeTesistaPosgrado';
     if (type.includes('UndergraduateStudent')) return 'nodeTesistaDeGrado';
@@ -1620,6 +1623,7 @@ SELECT ?s ?p ?o WHERE {
               nodeTesisMaestria:  { bg: 'rgba(254, 249, 195, 0.9)',  chipColor: '#ca8a04', titleColor: '#713f12', tagBg: 'rgba(202,138,4,0.15)',   tagColor: '#713f12' },
               nodeTopicCSO:       { bg: 'rgba(204, 251, 241, 0.9)',  chipColor: '#0d9488', titleColor: '#134e4a', tagBg: 'rgba(13,148,136,0.15)',  tagColor: '#134e4a' },
               nodeMindmap:        { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#4f46e5', titleColor: '#312e81', tagBg: 'rgba(79,70,229,0.15)',   tagColor: '#312e81' },
+              nodeRol:            { bg: 'rgba(254, 243, 199, 0.95)', chipColor: '#d97706', titleColor: '#78350f', tagBg: 'rgba(217,119,6,0.15)',   tagColor: '#78350f' },
             };
             const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
 
