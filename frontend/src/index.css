@@ -417,9 +417,9 @@ body, html, #root {
 
 /* Centered Inspector Modal (#inspectorSemantico) */
 #inspectorSemantico {
-  width: 550px;
-  max-width: 90vw;
-  max-height: 85vh;
+  width: 580px;
+  max-width: 92vw;
+  max-height: 90vh;
   background: var(--bg-overlay);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -438,6 +438,7 @@ body, html, #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .window-body {
@@ -446,8 +447,31 @@ body, html, #root {
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
   min-height: 0;
+}
+
+/* Custom scrollbars for window-body and collapsible-content */
+.window-body::-webkit-scrollbar,
+.collapsible-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.window-body::-webkit-scrollbar-track,
+.collapsible-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.window-body::-webkit-scrollbar-thumb,
+.collapsible-content::-webkit-scrollbar-thumb {
+  background: rgba(140, 143, 161, 0.35);
+  border-radius: 4px;
+}
+
+.window-body::-webkit-scrollbar-thumb:hover,
+.collapsible-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 143, 161, 0.6);
 }
 
 /* Collapsible Sections */
@@ -456,6 +480,7 @@ body, html, #root {
   border-radius: 10px;
   overflow: hidden;
   background: var(--bg-surface);
+  flex-shrink: 0;
 }
 
 .collapsible-header {
@@ -493,8 +518,9 @@ body, html, #root {
   gap: 10px;
   border-top: 1px solid var(--border-color);
   animation: fadeIn 0.15s ease-out;
-  max-height: 220px;
+  max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Validation Style */
