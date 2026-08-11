@@ -958,12 +958,19 @@ SELECT ?s ?p ?o WHERE {
 
     let insertQuery = '';
 
-    // Check if connecting Person <-> Project (VIVO PrincipalInvestigatorRole pattern)
+    // Check if connecting Person <-> Project (VIVO Role pattern)
     if ((isSourcePerson && isTargetProject) || (isSourceProject && isTargetPerson)) {
-      const personUri = isSourcePerson ? sourceNode.uri : targetNode.uri;
+      const personNode = isSourcePerson ? sourceNode : targetNode;
+      const personUri = personNode.uri;
       const projectUri = isSourceProject ? sourceNode.uri : targetNode.uri;
+      
+      const isFaculty = personNode.type.includes('FacultyMember');
+      const roleClass = isFaculty ? 'vivo:PrincipalInvestigatorRole' : 'vivo:MemberRole';
+      const roleLabel = isFaculty ? 'Principal Investigator Role' : 'Member Role';
+      const roleIdPrefix = isFaculty ? 'pi_role_' : 'member_role_';
+
       const roleId = Math.random().toString(36).substring(2, 9);
-      const roleUri = `http://example.org/resource/pi_role_${roleId}`;
+      const roleUri = `http://example.org/resource/${roleIdPrefix}${roleId}`;
       const userUri = user ? `http://cientopolis.org/rfu/user/${user.uid}` : 'http://cientopolis.org/rfu/user/guest';
 
       insertQuery = `
@@ -974,8 +981,8 @@ SELECT ?s ?p ?o WHERE {
         PREFIX rfu: <http://cientopolis.org/rfu/>
 
         INSERT DATA {
-          <${roleUri}> a vivo:PrincipalInvestigatorRole ;
-                       rdfs:label "Principal Investigator Role" ;
+          <${roleUri}> a ${roleClass} ;
+                       rdfs:label "${roleLabel}" ;
                        obo:RO_0000052 <${personUri}> ;
                        obo:BFO_0000054 <${projectUri}> ;
                        rfu:createdBy <${userUri}> .
