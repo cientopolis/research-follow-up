@@ -1168,6 +1168,10 @@ SELECT ?s ?p ?o WHERE {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#contributorTo';
     } else if ((sourceNode.type.includes('Article') || sourceNode.type.includes('Thesis')) && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
       suggestedPredicate = 'https://dblp.org/rdf/schema#authoredBy';
+    } else if ((sourceNode.type.includes('DocumentDraft') || sourceNode.type.includes('AcademicArticle') || sourceNode.type.includes('Article')) && targetNode.type.includes('Conference')) {
+      suggestedPredicate = 'http://purl.org/ontology/bibo/presentedAt';
+    } else if ((sourceNode.type.includes('DocumentDraft') || sourceNode.type.includes('AcademicArticle') || sourceNode.type.includes('Article')) && targetNode.type.includes('Journal')) {
+      suggestedPredicate = 'http://vivoweb.org/ontology/core#publicationVenue';
     } else if (sourceNode.type.includes('Article') && targetNode.type.includes('Topic')) {
       suggestedPredicate = 'http://purl.org/dc/terms/subject';
     }
@@ -2461,6 +2465,12 @@ SELECT ?s ?p ?o WHERE {
                 onChange={(e) => setSelectedRelationPredicate(e.target.value)}
                 style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.85rem', width: '100%' }}
               >
+                <optgroup label="Publicaciones y Venues (Conferencias / Revistas)">
+                  <option value="http://vivoweb.org/ontology/core#publicationVenue">vivo:publicationVenue — Venue / Lugar de publicación planificado u oficial</option>
+                  <option value="http://purl.org/ontology/bibo/presentedAt">bibo:presentedAt — Presentado o a presentar en conferencia</option>
+                  <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado o a enviar en revista/conferencia</option>
+                  <option value="http://cientopolis.org/rfu/targetVenue">rfu:targetVenue — Venue objetivo de envío (Planificación)</option>
+                </optgroup>
                 <optgroup label="VIVO (académico)">
                   <option value="http://vivoweb.org/ontology/core#advisor">vivo:advisor — Director de tesis</option>
                   <option value="http://vivoweb.org/ontology/core#hasMember">vivo:hasMember — Miembro de proyecto</option>
@@ -2470,7 +2480,6 @@ SELECT ?s ?p ?o WHERE {
                 </optgroup>
                 <optgroup label="DBLP / Bibliográfico">
                   <option value="https://dblp.org/rdf/schema#authoredBy">dblp:authoredBy — Autoría de paper</option>
-                  <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado en</option>
                 </optgroup>
                 <optgroup label="RFU (proyecto)">
                   <option value="http://cientopolis.org/rfu/hasMindmap">rfu:hasMindmap — Mapa mental de</option>
