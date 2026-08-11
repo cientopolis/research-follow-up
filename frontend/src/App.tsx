@@ -88,6 +88,18 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   'Meeting': [
     { uri: 'http://schema.org/url', label: 'URL Minutas / Reunión (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
     { uri: 'http://example.org/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
+  ],
+  'Conference': [
+    { uri: 'http://schema.org/url', label: 'URL Sitio de Conferencia (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/submissionDeadlineMonth', label: 'Meses de Deadline (ej. Marzo, Septiembre)' },
+    { uri: 'http://purl.org/ontology/bibo/rank', label: 'Ranking CORE (ej. A*, A, B, C)' },
+    { uri: 'http://purl.org/dc/terms/subject', label: 'Temáticas / Tópicos (dcterms:subject)' }
+  ],
+  'Journal': [
+    { uri: 'http://schema.org/url', label: 'URL Sitio de Revista (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://example.org/resource/submissionDeadlineMonth', label: 'Meses / Fechas de Envió (ej. Abierto todo el año / Mayo, Nov)' },
+    { uri: 'http://purl.org/ontology/bibo/rank', label: 'Cuartil / Ranking (ej. Q1, Q2, Q3, Q4)' },
+    { uri: 'http://purl.org/dc/terms/subject', label: 'Temáticas / Tópicos (dcterms:subject)' }
   ]
 };
 
@@ -1206,6 +1218,8 @@ SELECT ?s ?p ?o WHERE {
     if (typeURI.includes('Dataset')) return 'Tabla / Datos';
     if (typeURI.includes('MediaObject')) return 'Archivo';
     if (typeURI.includes('Meeting')) return 'Reunión / Minuta';
+    if (typeURI.includes('Conference')) return 'Conferencia';
+    if (typeURI.includes('Journal')) return 'Revista / Journal';
     if (typeURI.includes('Topic')) return 'Tópico CSO';
     if (typeURI.includes('Thesis')) {
       if (thesisType === 'PhD Thesis') return 'Tesis Doctoral';
@@ -1230,6 +1244,8 @@ SELECT ?s ?p ?o WHERE {
     if (type.includes('Dataset')) return 'nodeTabla';
     if (type.includes('MediaObject')) return 'nodeArchivo';
     if (type.includes('Meeting')) return 'nodeReunion';
+    if (type.includes('Conference')) return 'nodeConferencia';
+    if (type.includes('Journal')) return 'nodeRevista';
     if (type.includes('Thesis')) {
       if (thesisType === 'PhD Thesis') return 'nodeTesisDoctoral';
       if (thesisType === 'Magister') return 'nodeTesisMaestria';
@@ -1669,6 +1685,8 @@ SELECT ?s ?p ?o WHERE {
               nodeTabla:          { bg: 'rgba(236, 253, 245, 0.95)', chipColor: '#059669', titleColor: '#064e3b', tagBg: 'rgba(5,150,105,0.15)',   tagColor: '#064e3b' },
               nodeArchivo:        { bg: 'rgba(241, 245, 249, 0.95)', chipColor: '#475569', titleColor: '#0f172a', tagBg: 'rgba(71,85,105,0.15)',   tagColor: '#0f172a' },
               nodeReunion:        { bg: 'rgba(254, 226, 226, 0.95)', chipColor: '#e11d48', titleColor: '#881337', tagBg: 'rgba(225,29,72,0.15)',   tagColor: '#881337' },
+              nodeConferencia:    { bg: 'rgba(238, 242, 255, 0.95)', chipColor: '#6366f1', titleColor: '#312e81', tagBg: 'rgba(99,102,241,0.15)',  tagColor: '#312e81' },
+              nodeRevista:        { bg: 'rgba(245, 243, 255, 0.95)', chipColor: '#8b5cf6', titleColor: '#4c1d95', tagBg: 'rgba(139,92,246,0.15)',  tagColor: '#4c1d95' },
             };
             const chip = chipPalette[nodeDomId] ?? { bg: 'rgba(241,245,249,0.9)', chipColor: '#64748b', titleColor: '#1e293b', tagBg: 'rgba(100,116,139,0.12)', tagColor: '#334155' };
 
@@ -2361,6 +2379,8 @@ SELECT ?s ?p ?o WHERE {
                 <option value="http://schema.org/Dataset">📋 Tabla / Datos (schema:Dataset)</option>
                 <option value="http://schema.org/MediaObject">📄 Archivo (schema:MediaObject)</option>
                 <option value="http://vivoweb.org/ontology/core#Meeting">📅 Reunión / Minutas (vivo:Meeting)</option>
+                <option value="http://purl.org/ontology/bibo/Conference">🎤 Conferencia (bibo:Conference)</option>
+                <option value="http://purl.org/ontology/bibo/Journal">📰 Revista / Journal (bibo:Journal)</option>
                 <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#PhD">Tesis Doctoral (PhD Thesis)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#Master">Tesis de Maestría (Magister)</option>

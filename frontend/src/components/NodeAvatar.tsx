@@ -19,6 +19,8 @@ import {
   Table,
   File,
   CalendarBlank,
+  Presentation,
+  Newspaper,
 } from '@phosphor-icons/react';
 
 export interface NodeAvatarProps {
@@ -71,6 +73,8 @@ function DefaultConceptIcon({ nodeType, size, color }: { nodeType: string; size:
     case 'nodeTabla':          return <Table          {...props} />;
     case 'nodeArchivo':        return <File           {...props} />;
     case 'nodeReunion':        return <CalendarBlank  {...props} />;
+    case 'nodeConferencia':    return <Presentation   {...props} />;
+    case 'nodeRevista':        return <Newspaper      {...props} />;
     case 'nodeTesisDoctoral':  return <Medal          {...props} />;
     case 'nodeTesisMaestria':  return <Certificate    {...props} />;
     case 'nodeTopicCSO':       return <Tag            {...props} />;
