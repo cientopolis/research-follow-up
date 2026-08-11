@@ -2400,18 +2400,6 @@ SELECT ?s ?p ?o WHERE {
               <label>Sufijo de URI</label>
               <input type="text" placeholder="Ej: JuanPerez" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
             </div>
-            <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                🔗 URL Externa / Sitio Alojado
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>(Overleaf, Google Docs, Drive, etc.)</span>
-              </label>
-              <input
-                type="url"
-                placeholder="Ej: https://overleaf.com/read/xxxx"
-                value={newNodeData.externalUrl}
-                onChange={(e) => setNewNodeData({ ...newNodeData, externalUrl: e.target.value })}
-              />
-            </div>
             <div className="flex-row flex-space" style={{ marginTop: '10px' }}>
               <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
               <button className="btn btn-primary" onClick={createNode}>Crear Nodo</button>
