@@ -1274,7 +1274,7 @@ SELECT ?s ?p ?o WHERE {
       }}>
         {/* Left Side: Title and Node Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Spatial Semantic Canvas</h1>
+          <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Mejor seguimiento</h1>
           
           <div style={{ position: 'relative' }}>
             {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}

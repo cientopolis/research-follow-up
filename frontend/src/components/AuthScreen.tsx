@@ -82,10 +82,10 @@ export const AuthScreen: React.FC = () => {
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ fontSize: '2.5rem', margin: '0 auto' }}>🍅</div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4c4f69', margin: 0 }}>
-            Research Follow-up
+            Mejor seguimiento
           </h1>
           <p style={{ fontSize: '0.8rem', color: '#7c7f93', margin: 0 }}>
-            Spatial Semantic Canvas & Pomodoro Tracker
+            Lienzo semántico de investigación y seguimiento de proyectos
           </p>
         </div>
 

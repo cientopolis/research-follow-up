@@ -71,7 +71,7 @@ describe('App Canvas Component Tests', () => {
 
     // Wait for the loader/App to render the main Canvas screen
     await waitFor(() => {
-      expect(screen.getByText('Spatial Semantic Canvas')).toBeInTheDocument();
+      expect(screen.getByText('Mejor seguimiento')).toBeInTheDocument();
     });
 
     // Click "+ Agregar Nodo" button
@@ -181,7 +181,7 @@ describe('App Canvas Component Tests', () => {
 
     // Wait for the main canvas screen
     await waitFor(() => {
-      expect(screen.getByText('Spatial Semantic Canvas')).toBeInTheDocument();
+      expect(screen.getByText('Mejor seguimiento')).toBeInTheDocument();
     });
 
     // Click User menu to open it
