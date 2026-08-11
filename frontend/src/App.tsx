@@ -936,11 +936,64 @@ SELECT ?s ?p ?o WHERE {
   // Create RDF relation triple between two nodes
   const createRelation = async () => {
     if (!quickConnectSourceUri || !pendingConnectionTarget || !selectedRelationPredicate) return;
-    const insertQuery = `
-      INSERT DATA {
-        <${quickConnectSourceUri}> <${selectedRelationPredicate}> <${pendingConnectionTarget}> .
-      }
-    `;
+    
+    const sourceNode = nodes.find(n => n.uri === quickConnectSourceUri);
+    const targetNode = nodes.find(n => n.uri === pendingConnectionTarget);
+
+    const isSourcePerson = sourceNode && (
+      sourceNode.type.includes('Person') ||
+      sourceNode.type.includes('FacultyMember') ||
+      sourceNode.type.includes('GraduateStudent') ||
+      sourceNode.type.includes('UndergraduateStudent')
+    );
+    const isTargetProject = targetNode && targetNode.type.includes('Project');
+
+    const isSourceProject = sourceNode && sourceNode.type.includes('Project');
+    const isTargetPerson = targetNode && (
+      targetNode.type.includes('Person') ||
+      targetNode.type.includes('FacultyMember') ||
+      targetNode.type.includes('GraduateStudent') ||
+      targetNode.type.includes('UndergraduateStudent')
+    );
+
+    let insertQuery = '';
+
+    // Check if connecting Person <-> Project (VIVO PrincipalInvestigatorRole pattern)
+    if ((isSourcePerson && isTargetProject) || (isSourceProject && isTargetPerson)) {
+      const personUri = isSourcePerson ? sourceNode.uri : targetNode.uri;
+      const projectUri = isSourceProject ? sourceNode.uri : targetNode.uri;
+      const roleId = Math.random().toString(36).substring(2, 9);
+      const roleUri = `http://example.org/resource/pi_role_${roleId}`;
+      const userUri = user ? `http://cientopolis.org/rfu/user/${user.uid}` : 'http://cientopolis.org/rfu/user/guest';
+
+      insertQuery = `
+        PREFIX vivo: <http://vivoweb.org/ontology/core#>
+        PREFIX obo: <http://purl.obolibrary.org/obo/>
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX rfu: <http://cientopolis.org/rfu/>
+
+        INSERT DATA {
+          <${roleUri}> a vivo:PrincipalInvestigatorRole ;
+                       rdfs:label "Principal Investigator Role" ;
+                       obo:RO_0000052 <${personUri}> ;
+                       obo:BFO_0000054 <${projectUri}> ;
+                       rfu:createdBy <${userUri}> .
+
+          <${projectUri}> vivo:relates <${personUri}> ;
+                          vivo:relates <${roleUri}> .
+
+          <${quickConnectSourceUri}> <${selectedRelationPredicate}> <${pendingConnectionTarget}> .
+        }
+      `;
+    } else {
+      insertQuery = `
+        INSERT DATA {
+          <${quickConnectSourceUri}> <${selectedRelationPredicate}> <${pendingConnectionTarget}> .
+        }
+      `;
+    }
+
     try {
       const res = await fetchWithAuth('/api/sparql', {
         method: 'POST',
