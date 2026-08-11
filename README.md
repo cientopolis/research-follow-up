@@ -1,6 +1,6 @@
-# Spatial Semantic Canvas (Seguimiento de Actividades de Investigación)
+# DireAtento — Seguimiento atento de sus investigaciones
 
-Un lienzo interactivo y visual (**Spatial Canvas**) maquetado sobre un backend semántico gobernado por ontologías OWL y almacenado en un Triplestore RDF (**Ontotext GraphDB**). Diseñado específicamente para que directores e investigadores sigan y gestionen su pipeline académico, tesistas, proyectos y publicaciones de forma estructurada.
+Un lienzo interactivo y visual (**Spatial Semantic Canvas**) maquetado sobre un backend semántico gobernado por ontologías OWL y almacenado en un Triplestore RDF (**Ontotext GraphDB**). Diseñado con la identidad **DireAtento** para acompañar el progreso de tesistas, investigaciones, proyectos y publicaciones de forma estructurada, cercana y atenta.
 
 ---
 
