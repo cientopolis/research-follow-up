@@ -509,7 +509,16 @@ SELECT ?s ?p ?o WHERE {
     if (typeURI.includes('GraduateStudent')) return DEFAULT_PROPERTIES_BY_TYPE['GraduateStudent'];
     if (typeURI.includes('UndergraduateStudent')) return DEFAULT_PROPERTIES_BY_TYPE['UndergraduateStudent'];
     if (typeURI.includes('Project')) return DEFAULT_PROPERTIES_BY_TYPE['Project'];
+    if (typeURI.includes('DocumentDraft')) return DEFAULT_PROPERTIES_BY_TYPE['DocumentDraft'];
+    if (typeURI.includes('AcademicArticle')) return DEFAULT_PROPERTIES_BY_TYPE['AcademicArticle'];
     if (typeURI.includes('Article')) return DEFAULT_PROPERTIES_BY_TYPE['Article'];
+    if (typeURI.includes('Folder')) return DEFAULT_PROPERTIES_BY_TYPE['Folder'];
+    if (typeURI.includes('ImageObject')) return DEFAULT_PROPERTIES_BY_TYPE['ImageObject'];
+    if (typeURI.includes('Dataset')) return DEFAULT_PROPERTIES_BY_TYPE['Dataset'];
+    if (typeURI.includes('MediaObject')) return DEFAULT_PROPERTIES_BY_TYPE['MediaObject'];
+    if (typeURI.includes('Meeting')) return DEFAULT_PROPERTIES_BY_TYPE['Meeting'];
+    if (typeURI.includes('Conference')) return DEFAULT_PROPERTIES_BY_TYPE['Conference'];
+    if (typeURI.includes('Journal')) return DEFAULT_PROPERTIES_BY_TYPE['Journal'];
     if (typeURI.includes('Topic')) return DEFAULT_PROPERTIES_BY_TYPE['Topic'];
     if (typeURI.includes('Thesis')) return DEFAULT_PROPERTIES_BY_TYPE['Thesis'];
     return [];
