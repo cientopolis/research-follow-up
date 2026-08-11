@@ -71,7 +71,8 @@ describe('App Canvas Component Tests', () => {
 
     // Wait for the loader/App to render the main Canvas screen
     await waitFor(() => {
-      expect(screen.getByText('Mejor seguimiento')).toBeInTheDocument();
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+      expect(screen.getByText('Atento')).toBeInTheDocument();
     });
 
     // Click "+ Agregar Nodo" button
@@ -181,7 +182,8 @@ describe('App Canvas Component Tests', () => {
 
     // Wait for the main canvas screen
     await waitFor(() => {
-      expect(screen.getByText('Mejor seguimiento')).toBeInTheDocument();
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+      expect(screen.getByText('Atento')).toBeInTheDocument();
     });
 
     // Click User menu to open it

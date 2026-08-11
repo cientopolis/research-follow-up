@@ -1303,7 +1303,10 @@ SELECT ?s ?p ?o WHERE {
       }}>
         {/* Left Side: Title and Node Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Mejor seguimiento</h1>
+          <h1 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-investigador)' }}>Dire</span>
+            <span style={{ fontWeight: 400, color: 'var(--accent)' }}>Atento</span>
+          </h1>
           
           <div style={{ position: 'relative' }}>
             {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}

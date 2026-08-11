@@ -81,11 +81,12 @@ export const AuthScreen: React.FC = () => {
         {/* Brand Header */}
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ fontSize: '2.5rem', margin: '0 auto' }}>🍅</div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4c4f69', margin: 0 }}>
-            Mejor seguimiento
+          <h1 style={{ fontSize: '1.75rem', margin: 0, letterSpacing: '-0.02em' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-investigador, #1A2B48)' }}>Dire</span>
+            <span style={{ fontWeight: 400, color: 'var(--accent, #C17F59)' }}>Atento</span>
           </h1>
-          <p style={{ fontSize: '0.8rem', color: '#7c7f93', margin: 0 }}>
-            Lienzo semántico de investigación y seguimiento de proyectos
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-sub, #4A5568)', margin: 0, lineHeight: 1.4 }}>
+            Acompañe el progreso de sus tesistas y realice un seguimiento atento de sus investigaciones
           </p>
         </div>
 

@@ -877,7 +877,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
         <div id="pomodoroCurrentTask" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', background: 'var(--bg-mantle)', boxSizing: 'border-box' }}>
           {isDev && <span className="dev-tag-badge" style={{ top: '-10px', right: '10px' }}>#pomodoroCurrentTask</span>}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>TAREA ACTUAL</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>EL DÍA A DÍA DEL DIRE, ORGANIZADO</label>
             {!isCreatingTask && (
               <button className="btn btn-sm btn-secondary" onClick={() => setIsCreatingTask(true)} style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
                 + Nueva

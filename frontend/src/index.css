@@ -1,48 +1,49 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
 :root {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light;
-  color: #4c4f69;
-  background-color: #eff1f5;
+  color: #2D3748;
+  background-color: #F7FAFC;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Color Palette (Catppuccin Latte Inspired Light Mode) */
-  --bg-base: #eff1f5;
-  --bg-mantle: #e6e9ef;
-  --bg-crust: #dce0e8;
-  --bg-surface: rgba(255, 255, 255, 0.7);
-  --bg-overlay: rgba(230, 233, 239, 0.85);
+  /* DireAtento Brand Palette */
+  --bg-base: #F7FAFC;
+  --bg-mantle: #EDF2F7;
+  --bg-crust: #E2E8F0;
+  --bg-surface: rgba(255, 255, 255, 0.85);
+  --bg-overlay: rgba(247, 250, 252, 0.95);
   
-  --text-main: #4c4f69;
-  --text-sub: #5c5f77;
-  --text-muted: #8c8fa1;
+  --text-main: #1A2B48;          /* Azul Noche Académico */
+  --text-sub: #4A5568;
+  --text-muted: #718096;
 
-  /* Semantics */
-  --color-investigador: #1e66f5; /* Blue */
-  --color-tesista: #40a02b;      /* Green / Posgrado */
-  --color-tesista-grado: #209fb5;/* Sapphire / Grado */
-  --color-proyecto: #d20f39;     /* Red/Pink */
-  --color-paper: #8839ef;        /* Purple */
-  --color-topic: #179287;        /* Teal */
-  --color-tesis-doctoral: #fe640b; /* Peach */
-  --color-tesis-maestria: #df8e1d; /* Yellow */
+  /* DireAtento Brand Colors */
+  --color-investigador: #1A2B48; /* Azul Noche Académico */
+  --color-tesista: #C17F59;      /* Cobre Cálido / Acompañamiento */
+  --color-tesista-grado: #A3D9C9;/* Verde Menta Suave / Progreso */
+  --color-proyecto: #C17F59;     /* Cobre Cálido */
+  --color-paper: #1A2B48;        /* Azul Noche */
+  --color-topic: #A3D9C9;        /* Verde Menta */
+  --color-tesis-doctoral: #C17F59; /* Cobre Cálido */
+  --color-tesis-maestria: #A3D9C9; /* Verde Menta */
   
-  --accent: #df8e1d;             /* Yellow/Amber */
-  --border-color: rgba(0, 0, 0, 0.08);
-  --border-active: rgba(0, 0, 0, 0.2);
-  --border-focus: #1e66f5;
+  --accent: #C17F59;             /* Cobre Cálido / Atención */
+  --accent-mint: #A3D9C9;        /* Verde Menta / Acción Positiva */
+  --border-color: rgba(26, 43, 72, 0.12);
+  --border-active: rgba(193, 127, 89, 0.4);
+  --border-focus: #C17F59;
 }
 
 body, html, #root {
