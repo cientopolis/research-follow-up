@@ -30,6 +30,37 @@ const REPO = process.env.GRAPHDB_REPOSITORY || 'researcherDB';
 const USER = process.env.GRAPHDB_USER;
 const PASSWORD = process.env.GRAPHDB_PASSWORD;
 
+const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'admin@cientopolis.org';
+const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'admin123456';
+
+// Auto-provision SuperAdmin user in Firebase Auth on startup if needed
+const ensureSuperAdminUser = async () => {
+  try {
+    const authService = getAuth();
+    let superAdminUser;
+    try {
+      superAdminUser = await authService.getUserByEmail(SUPERADMIN_EMAIL);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        superAdminUser = await authService.createUser({
+          email: SUPERADMIN_EMAIL,
+          password: SUPERADMIN_PASSWORD,
+          displayName: 'Super Admin',
+        });
+        console.log(`[SuperAdmin Init] Usuario ${SUPERADMIN_EMAIL} creado exitosamente.`);
+      } else {
+        throw err;
+      }
+    }
+    if (superAdminUser) {
+      await authService.setCustomUserClaims(superAdminUser.uid, { admin: true, superadmin: true });
+    }
+  } catch (error) {
+    console.error('[SuperAdmin Init] Error al verificar/crear usuario SuperAdmin:', error.message);
+  }
+};
+ensureSuperAdminUser();
+
 // Auth Middleware
 const checkAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -55,6 +86,7 @@ const checkSuperAdmin = async (req, res, next) => {
   }
   const isSuperAdminClaim = req.user.admin === true || req.user.superadmin === true;
   const isSuperAdminEmail = req.user.email && (
+    req.user.email === SUPERADMIN_EMAIL ||
     req.user.email === 'admin@cientopolis.org' ||
     req.user.email.startsWith('superadmin@') ||
     req.user.email.startsWith('admin@')
