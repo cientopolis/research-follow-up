@@ -961,13 +961,18 @@ SELECT ?s ?p ?o WHERE {
     // Check if connecting Person <-> Project (VIVO Role pattern)
     if ((isSourcePerson && isTargetProject) || (isSourceProject && isTargetPerson)) {
       const personNode = isSourcePerson ? sourceNode : targetNode;
+      const projectNode = isSourceProject ? sourceNode : targetNode;
       const personUri = personNode.uri;
-      const projectUri = isSourceProject ? sourceNode.uri : targetNode.uri;
+      const projectUri = projectNode.uri;
       
       const isFaculty = personNode.type.includes('FacultyMember');
       const roleClass = isFaculty ? 'vivo:PrincipalInvestigatorRole' : 'vivo:MemberRole';
       const roleLabel = isFaculty ? 'Principal Investigator Role' : 'Member Role';
       const roleIdPrefix = isFaculty ? 'pi_role_' : 'member_role_';
+
+      // Position intermediate role node right in the middle between Person and Project
+      const midX = Math.round((personNode.x + projectNode.x) / 2);
+      const midY = Math.round((personNode.y + projectNode.y) / 2);
 
       const roleId = Math.random().toString(36).substring(2, 9);
       const roleUri = `http://example.org/resource/${roleIdPrefix}${roleId}`;
@@ -978,11 +983,14 @@ SELECT ?s ?p ?o WHERE {
         PREFIX obo: <http://purl.obolibrary.org/obo/>
         PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX ex: <http://example.org/resource/>
         PREFIX rfu: <http://cientopolis.org/rfu/>
 
         INSERT DATA {
           <${roleUri}> a ${roleClass} ;
                        rdfs:label "${roleLabel}" ;
+                       ex:posX "${midX}" ;
+                       ex:posY "${midY}" ;
                        obo:RO_0000052 <${personUri}> ;
                        obo:BFO_0000054 <${projectUri}> ;
                        rfu:createdBy <${userUri}> .
@@ -990,7 +998,8 @@ SELECT ?s ?p ?o WHERE {
           <${projectUri}> vivo:relates <${personUri}> ;
                           vivo:relates <${roleUri}> .
 
-          <${quickConnectSourceUri}> <${selectedRelationPredicate}> <${pendingConnectionTarget}> .
+          <${roleUri}> obo:RO_0000052 <${personUri}> .
+          <${roleUri}> obo:BFO_0000054 <${projectUri}> .
         }
       `;
     } else {
