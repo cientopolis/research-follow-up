@@ -87,14 +87,14 @@ describe('App Canvas Component Tests', () => {
     fireEvent.click(createTab);
 
     // Fill in form inputs
-    const labelInput = screen.getByPlaceholderText('Ej: Dr. Gomez o IEEE ISWC 2026');
-    const suffixInput = screen.getByPlaceholderText('Ej: JuanPerez o ISWC2026');
+    const labelInput = screen.getByPlaceholderText('Ej: IEEE ISWC 2026 o Journal of Web Semantics');
+    const suffixInput = screen.getByPlaceholderText('Ej: ISWC2026 o JWS');
 
     fireEvent.change(labelInput, { target: { value: 'Juan Perez' } });
     fireEvent.change(suffixInput, { target: { value: 'JuanPerez' } });
 
-    // Click "Crear y Agregar Nodo" button inside modal
-    const createButton = screen.getByText('Crear y Agregar Nodo');
+    // Click "Crear y Registrar Nodo" button inside modal
+    const createButton = screen.getByText('Crear y Registrar Nodo');
     fireEvent.click(createButton);
 
     // Verify the modal closes and the new node is fetched and rendered in the canvas

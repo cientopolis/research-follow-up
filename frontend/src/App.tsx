@@ -201,7 +201,15 @@ export default function App() {
   const [isConnectingMode, setIsConnectingMode] = useState(false);
   const [connectSourceNode, setConnectSourceNode] = useState<string | null>(null);
   const [showNewNodeModal, setShowNewNodeModal] = useState(false);
-  const [newNodeData, setNewNodeData] = useState({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '', externalUrl: '' });
+  const [newNodeData, setNewNodeData] = useState({
+    label: '',
+    type: 'http://purl.org/ontology/bibo/Conference',
+    uriSuffix: '',
+    externalUrl: '',
+    rank: 'CORE A*',
+    deadlineMonth: 'Marzo',
+    subject: ''
+  });
 
   // Quick-connect flow: "+" button on node edge
   const [quickConnectSourceUri, setQuickConnectSourceUri] = useState<string | null>(null);
@@ -1071,6 +1079,18 @@ SELECT ?s ?p ?o WHERE {
 
     if (newNodeData.externalUrl && newNodeData.externalUrl.trim()) {
       extraTriples += `\n<${uri}> <http://schema.org/url> <${newNodeData.externalUrl.trim()}> .`;
+    }
+
+    if (newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') {
+      if (newNodeData.rank && newNodeData.rank.trim()) {
+        extraTriples += `\n<${uri}> <http://purl.org/ontology/bibo/rank> "${newNodeData.rank.trim()}" .`;
+      }
+      if (newNodeData.deadlineMonth && newNodeData.deadlineMonth.trim()) {
+        extraTriples += `\n<${uri}> <http://example.org/resource/submissionDeadlineMonth> "${newNodeData.deadlineMonth.trim()}" .`;
+      }
+      if (newNodeData.subject && newNodeData.subject.trim()) {
+        extraTriples += `\n<${uri}> <http://purl.org/dc/terms/subject> "${newNodeData.subject.trim()}" .`;
+      }
     }
 
     const insertQuery = `
@@ -2637,15 +2657,74 @@ SELECT ?s ?p ?o WHERE {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div className="form-group">
                   <label>Etiqueta / Nombre</label>
-                  <input type="text" placeholder="Ej: Dr. Gomez o IEEE ISWC 2026" value={newNodeData.label} onChange={(e) => setNewNodeData({ ...newNodeData, label: e.target.value })} />
+                  <input type="text" placeholder="Ej: IEEE ISWC 2026 o Journal of Web Semantics" value={newNodeData.label} onChange={(e) => setNewNodeData({ ...newNodeData, label: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label>Sufijo de URI</label>
-                  <input type="text" placeholder="Ej: JuanPerez o ISWC2026" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
+                  <input type="text" placeholder="Ej: ISWC2026 o JWS" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
                 </div>
+
+                {/* Campos específicos para Conferencia y Revista */}
+                {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && (
+                  <>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>
+                          {newNodeData.type === 'http://purl.org/ontology/bibo/Conference' ? '🏆 Ranking CORE' : '🏆 Cuartil'}
+                        </label>
+                        {newNodeData.type === 'http://purl.org/ontology/bibo/Conference' ? (
+                          <select value={newNodeData.rank} onChange={(e) => setNewNodeData({ ...newNodeData, rank: e.target.value })}>
+                            <option value="CORE A*">CORE A*</option>
+                            <option value="CORE A">CORE A</option>
+                            <option value="CORE B">CORE B</option>
+                            <option value="CORE C">CORE C</option>
+                            <option value="Unranked">Sin Rank (Unranked)</option>
+                          </select>
+                        ) : (
+                          <select value={newNodeData.rank} onChange={(e) => setNewNodeData({ ...newNodeData, rank: e.target.value })}>
+                            <option value="Q1">Q1</option>
+                            <option value="Q2">Q2</option>
+                            <option value="Q3">Q3</option>
+                            <option value="Q4">Q4</option>
+                            <option value="Sin Cuartil">Sin Cuartil</option>
+                          </select>
+                        )}
+                      </div>
+
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>📅 Mes Deadline</label>
+                        <select value={newNodeData.deadlineMonth} onChange={(e) => setNewNodeData({ ...newNodeData, deadlineMonth: e.target.value })}>
+                          <option value="Enero">Enero</option>
+                          <option value="Febrero">Febrero</option>
+                          <option value="Marzo">Marzo</option>
+                          <option value="Abril">Abril</option>
+                          <option value="Mayo">Mayo</option>
+                          <option value="Junio">Junio</option>
+                          <option value="Julio">Julio</option>
+                          <option value="Agosto">Agosto</option>
+                          <option value="Septiembre">Septiembre</option>
+                          <option value="Octubre">Octubre</option>
+                          <option value="Noviembre">Noviembre</option>
+                          <option value="Diciembre">Diciembre</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>🔗 URL Externa / Sitio Web</label>
+                      <input type="text" placeholder="Ej: https://iswc2026.semanticweb.org" value={newNodeData.externalUrl} onChange={(e) => setNewNodeData({ ...newNodeData, externalUrl: e.target.value })} />
+                    </div>
+
+                    <div className="form-group">
+                      <label>🏷️ Temáticas / Áreas (dcterms:subject)</label>
+                      <input type="text" placeholder="Ej: Semantic Web, Knowledge Graphs, AI" value={newNodeData.subject} onChange={(e) => setNewNodeData({ ...newNodeData, subject: e.target.value })} />
+                    </div>
+                  </>
+                )}
+
                 <div className="flex-row flex-space" style={{ marginTop: '6px' }}>
                   <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
-                  <button className="btn btn-primary" onClick={createNode}>Crear y Agregar Nodo</button>
+                  <button className="btn btn-primary" onClick={createNode}>Crear y Registrar Nodo</button>
                 </div>
               </div>
             )}
