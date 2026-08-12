@@ -240,9 +240,10 @@ SELECT ?s ?p ?o WHERE {
 
   // Catalog / Shared Node Bank state
   const [nodeModeTab, setNodeModeTab] = useState<'catalog' | 'new'>('catalog');
-  const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; subject?: string; externalUrl?: string }[]>([]);
+  const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string }[]>([]);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+  const [editingCatalogNode, setEditingCatalogNode] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } | null>(null);
 
   // SuperAdmin User Management Modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -340,11 +341,12 @@ SELECT ?s ?p ?o WHERE {
       PREFIX schema: <http://schema.org/>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      SELECT DISTINCT ?node ?label ?type ?rank ?subject ?externalUrl WHERE {
+      SELECT DISTINCT ?node ?label ?type ?rank ?deadlineMonth ?subject ?externalUrl WHERE {
         ?node rdf:type <${finalType}> .
         ?node rdfs:label ?label .
         OPTIONAL { ?node rdf:type ?type . FILTER(?type != <http://www.w3.org/2000/01/rdf-schema#Resource>) }
         OPTIONAL { ?node bibo:rank ?rank }
+        OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
         OPTIONAL { ?node dcterms:subject ?subject }
         OPTIONAL { ?node schema:url ?url1 }
         OPTIONAL { ?node foaf:page ?url2 }
@@ -361,21 +363,23 @@ SELECT ?s ?p ?o WHERE {
       });
       const data = await response.json();
       if (data.results && data.results.bindings) {
-        const catalogMap: { [uri: string]: { uri: string; label: string; type: string; rank?: string; subject?: string; externalUrl?: string } } = {};
+        const catalogMap: { [uri: string]: { uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } } = {};
         
         data.results.bindings.forEach((b: any) => {
           const uri = b.node.value;
           const label = b.label.value;
           const type = b.type ? b.type.value : targetType;
           const rank = b.rank ? b.rank.value : undefined;
+          const deadlineMonth = b.deadlineMonth ? b.deadlineMonth.value : undefined;
           const subject = b.subject ? b.subject.value : undefined;
           const externalUrl = b.externalUrl ? b.externalUrl.value : undefined;
 
           if (!catalogMap[uri]) {
-            catalogMap[uri] = { uri, label, type, rank, subject, externalUrl };
+            catalogMap[uri] = { uri, label, type, rank, deadlineMonth, subject, externalUrl };
           } else {
             // Prioritize specific values if present in multiple bindings
             if (rank) catalogMap[uri].rank = rank;
+            if (deadlineMonth) catalogMap[uri].deadlineMonth = deadlineMonth;
             if (subject) catalogMap[uri].subject = subject;
             if (externalUrl) catalogMap[uri].externalUrl = externalUrl;
           }
@@ -1117,6 +1121,53 @@ SELECT ?s ?p ?o WHERE {
       }
     } catch (e) {
       console.error('Error al incorporar nodo existente al lienzo', e);
+    }
+  };
+
+  // SuperAdmin update shared node properties in GraphDB
+  const saveEditedCatalogNode = async () => {
+    if (!editingCatalogNode || !isSuperAdmin) return;
+
+    let updateTriples = `
+      DELETE WHERE { <${editingCatalogNode.uri}> rdfs:label ?o . };
+      DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> ?o . };
+      DELETE WHERE { <${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> ?o . };
+      DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> ?o . };
+      DELETE WHERE { <${editingCatalogNode.uri}> <http://schema.org/url> ?o . };
+      
+      INSERT DATA {
+        <${editingCatalogNode.uri}> rdfs:label "${editingCatalogNode.label}" .
+    `;
+
+    if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
+      updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
+    }
+    if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
+      updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+    }
+    if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
+      updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> "${editingCatalogNode.subject.trim()}" .`;
+    }
+    if (editingCatalogNode.externalUrl && editingCatalogNode.externalUrl.trim()) {
+      updateTriples += `\n<${editingCatalogNode.uri}> <http://schema.org/url> <${editingCatalogNode.externalUrl.trim()}> .`;
+    }
+
+    updateTriples += `\n}`;
+
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: updateTriples })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingCatalogNode(null);
+        fetchGlobalCatalog(newNodeData.type);
+        fetchGraphData();
+      }
+    } catch (e) {
+      console.error('Error al actualizar nodo del catálogo', e);
     }
   };
 
@@ -2721,29 +2772,117 @@ SELECT ?s ?p ?o WHERE {
                         key={item.uri}
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
+                          flexDirection: 'column',
                           padding: '10px 12px',
                           borderRadius: '8px',
                           background: 'var(--bg-mantle)',
                           border: '1px solid var(--border-color)',
-                          gap: '10px'
+                          gap: '8px'
                         }}
                       >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
-                          <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                            {item.rank && <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>}
-                            {item.subject && <span>{item.subject}</span>}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
+                            <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              {item.rank && <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>}
+                              {item.deadlineMonth && <span style={{ background: 'rgba(163,217,201,0.2)', color: '#1B5346', padding: '1px 5px', borderRadius: '4px' }}>📅 {item.deadlineMonth}</span>}
+                              {item.subject && <span>{item.subject}</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            {isSuperAdmin && (
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => setEditingCatalogNode(editingCatalogNode?.uri === item.uri ? null : { ...item })}
+                                style={{ padding: '5px 8px', fontSize: '0.75rem' }}
+                                title="Editar entidad compartida en GraphDB"
+                              >
+                                ✏️ Editar
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => addExistingNodeToCanvas(item.uri)}
+                              style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+                            >
+                              ➕ Agregar a mi lienzo
+                            </button>
                           </div>
                         </div>
-                        <button
-                          className="btn btn-sm btn-primary"
-                          onClick={() => addExistingNodeToCanvas(item.uri)}
-                          style={{ padding: '5px 10px', fontSize: '0.75rem', flexShrink: 0 }}
-                        >
-                          ➕ Agregar a mi lienzo
-                        </button>
+
+                        {/* Inline Admin Editor for shared node */}
+                        {isSuperAdmin && editingCatalogNode?.uri === item.uri && (
+                          <div style={{
+                            marginTop: '6px', paddingTop: '10px', borderTop: '1px dashed var(--border-color)',
+                            display: 'flex', flexDirection: 'column', gap: '10px', background: 'var(--bg-surface)',
+                            padding: '10px', borderRadius: '6px'
+                          }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-investigador)' }}>✏️ Edición de Entidad en GraphDB (SuperAdmin)</span>
+                            <div className="form-group">
+                              <label style={{ fontSize: '0.72rem' }}>Nombre / Etiqueta</label>
+                              <input
+                                type="text"
+                                value={editingCatalogNode.label}
+                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, label: e.target.value })}
+                                style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div className="form-group">
+                                <label style={{ fontSize: '0.72rem' }}>Ranking</label>
+                                <select
+                                  value={editingCatalogNode.rank || ''}
+                                  onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
+                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                >
+                                  <option value="">-- Sin Ranking --</option>
+                                  <option value="CORE A*">CORE A*</option>
+                                  <option value="CORE A">CORE A</option>
+                                  <option value="CORE B">CORE B</option>
+                                  <option value="CORE C">CORE C</option>
+                                  <option value="Q1">Q1</option>
+                                  <option value="Q2">Q2</option>
+                                  <option value="Q3">Q3</option>
+                                  <option value="Q4">Q4</option>
+                                </select>
+                              </div>
+                              <div className="form-group">
+                                <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
+                                <input
+                                  type="text"
+                                  value={editingCatalogNode.deadlineMonth || ''}
+                                  onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
+                                  placeholder="Ej: Marzo"
+                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                />
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label style={{ fontSize: '0.72rem' }}>URL Oficial</label>
+                              <input
+                                type="text"
+                                value={editingCatalogNode.externalUrl || ''}
+                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, externalUrl: e.target.value })}
+                                placeholder="https://..."
+                                style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label style={{ fontSize: '0.72rem' }}>Temáticas (CSO)</label>
+                              <input
+                                type="text"
+                                value={editingCatalogNode.subject || ''}
+                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, subject: e.target.value })}
+                                placeholder="Semantic Web, Artificial Intelligence"
+                                style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                              <button className="btn btn-sm" onClick={() => setEditingCatalogNode(null)} style={{ fontSize: '0.75rem' }}>Cancelar</button>
+                              <button className="btn btn-sm btn-primary" onClick={saveEditedCatalogNode} style={{ fontSize: '0.75rem' }}>💾 Guardar en GraphDB</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ));
                   })()}
