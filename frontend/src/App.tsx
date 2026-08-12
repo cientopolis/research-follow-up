@@ -280,15 +280,27 @@ SELECT ?s ?p ?o WHERE {
       });
       const data = await response.json();
       if (data.results && data.results.bindings) {
-        const catalogList = data.results.bindings.map((b: any) => ({
-          uri: b.node.value,
-          label: b.label.value,
-          type: b.type ? b.type.value : targetType,
-          rank: b.rank ? b.rank.value : undefined,
-          subject: b.subject ? b.subject.value : undefined,
-          externalUrl: b.externalUrl ? b.externalUrl.value : undefined,
-        }));
-        setGlobalCatalogNodes(catalogList);
+        const catalogMap: { [uri: string]: { uri: string; label: string; type: string; rank?: string; subject?: string; externalUrl?: string } } = {};
+        
+        data.results.bindings.forEach((b: any) => {
+          const uri = b.node.value;
+          const label = b.label.value;
+          const type = b.type ? b.type.value : targetType;
+          const rank = b.rank ? b.rank.value : undefined;
+          const subject = b.subject ? b.subject.value : undefined;
+          const externalUrl = b.externalUrl ? b.externalUrl.value : undefined;
+
+          if (!catalogMap[uri]) {
+            catalogMap[uri] = { uri, label, type, rank, subject, externalUrl };
+          } else {
+            // Prioritize specific values if present in multiple bindings
+            if (rank) catalogMap[uri].rank = rank;
+            if (subject) catalogMap[uri].subject = subject;
+            if (externalUrl) catalogMap[uri].externalUrl = externalUrl;
+          }
+        });
+
+        setGlobalCatalogNodes(Object.values(catalogMap));
       }
     } catch (e) {
       console.error('Error al cargar catálogo global', e);
