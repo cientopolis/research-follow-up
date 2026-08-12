@@ -19,12 +19,15 @@ interface AdminCatalogPanelProps {
 }
 
 const CATEGORIES = [
-  { id: 'http://purl.org/ontology/bibo/Conference', label: 'Conferencias', icon: '🎤', clean: 'Conference' },
-  { id: 'http://purl.org/ontology/bibo/Journal', label: 'Revistas / Journals', icon: '📰', clean: 'Journal' },
-  { id: 'http://cso.kmi.open.ac.uk/schema/cso#Topic', label: 'Tópicos CSO', icon: '🏷️', clean: 'Topic' },
+  { id: 'http://purl.org/ontology/bibo/Conference', label: 'Conferencias', icon: '🎤', clean: 'Conferencia' },
+  { id: 'http://purl.org/ontology/bibo/Journal', label: 'Revistas / Journals', icon: '📰', clean: 'Revista / Journal' },
+  { id: 'http://cso.kmi.open.ac.uk/schema/cso#Topic', label: 'Tópicos CSO', icon: '🏷️', clean: 'Tópico CSO' },
+  { id: 'http://vivoweb.org/ontology/core#FacultyMember', label: 'Investigadores', icon: '👨‍🔬', clean: 'Investigador' },
+  { id: 'http://vivoweb.org/ontology/core#GraduateStudent', label: 'Tesistas de Posgrado', icon: '🎓', clean: 'Tesista de Posgrado' },
+  { id: 'http://vivoweb.org/ontology/core#UndergraduateStudent', label: 'Tesistas de Grado', icon: '🎓', clean: 'Tesista de Grado' },
   { id: 'http://schema.org/Dataset', label: 'Datasets', icon: '📋', clean: 'Dataset' },
-  { id: 'http://schema.org/MediaObject', label: 'Archivos / Media', icon: '📄', clean: 'MediaObject' },
-  { id: 'http://vivoweb.org/ontology/core#Project', label: 'Proyectos', icon: '🚀', clean: 'Project' }
+  { id: 'http://schema.org/MediaObject', label: 'Archivos / Media', icon: '📄', clean: 'Archivo' },
+  { id: 'http://vivoweb.org/ontology/core#Project', label: 'Proyectos', icon: '🚀', clean: 'Proyecto' }
 ];
 
 export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
@@ -292,7 +295,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       </div>
 
       {/* Categories Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
         {CATEGORIES.map(cat => {
           const isActive = activeCategory === cat.id;
           return (
