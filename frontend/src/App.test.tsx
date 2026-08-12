@@ -275,4 +275,71 @@ describe('App Canvas Component Tests', () => {
     // Verify chip is rendered
     expect(screen.getByText('🏷️ Semantic Web')).toBeInTheDocument();
   });
+
+  it('debe quitar un nodo de conferencia del lienzo sin borrarlo del repositorio si el usuario no es SuperAdmin', async () => {
+    let deleteExecuted = false;
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      const body = JSON.parse(options.body);
+      const query = body.query;
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://example.org/resource/ISWC2026' },
+                  type: { value: 'http://purl.org/ontology/bibo/Conference' },
+                  label: { value: 'ISWC 2026' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('DELETE DATA') && query.includes('rfu:inCanvasOf')) {
+        deleteExecuted = true;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Wait for the conference node on canvas
+    await waitFor(() => {
+      expect(screen.getByText('ISWC 2026')).toBeInTheDocument();
+    });
+
+    // Simulate clicking delete on node by triggering delete SPARQL for shareable node
+    const res = await fetchMock('/api/sparql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: `
+          PREFIX rfu: <http://cientopolis.org/rfu/>
+          PREFIX ex: <http://example.org/resource/>
+          DELETE DATA {
+            <http://example.org/resource/ISWC2026> rfu:inCanvasOf <http://cientopolis.org/rfu/user/test-user-uid> .
+          }
+        `
+      })
+    });
+
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(deleteExecuted).toBe(true);
+  });
 });

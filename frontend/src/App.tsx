@@ -1304,14 +1304,40 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
-  // Delete Node from GraphDB
+  // Delete Node (Removes from user canvas for regular users, deletes globally only if SuperAdmin or personal node)
   const deleteNode = async () => {
-    if (!nodeToDelete) return;
-    
-    const query = `
-      DELETE WHERE { <${nodeToDelete.uri}> ?p ?o . };
-      DELETE WHERE { ?s ?p <${nodeToDelete.uri}> . }
-    `;
+    if (!nodeToDelete || !user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    const isShareableNode = (
+      nodeToDelete.type.includes('Conference') ||
+      nodeToDelete.type.includes('Journal') ||
+      nodeToDelete.type.includes('Topic') ||
+      nodeToDelete.type.includes('Dataset') ||
+      nodeToDelete.type.includes('MediaObject')
+    );
+
+    let query = '';
+
+    if (isShareableNode && !isSuperAdmin) {
+      // Non-admin user: Remove node ONLY from current user's canvas and clear their user-specific canvas triples
+      query = `
+        PREFIX rfu: <http://cientopolis.org/rfu/>
+        PREFIX ex: <http://example.org/resource/>
+
+        DELETE DATA {
+          <${nodeToDelete.uri}> rfu:inCanvasOf <${userUri}> .
+          <${nodeToDelete.uri}> rfu:createdBy <${userUri}> .
+          <${nodeToDelete.uri}> ex:posX ?x .
+          <${nodeToDelete.uri}> ex:posY ?y .
+        }
+      `;
+    } else {
+      // SuperAdmin OR personal node: Delete node and all its triples globally from GraphDB
+      query = `
+        DELETE WHERE { <${nodeToDelete.uri}> ?p ?o . };
+        DELETE WHERE { ?s ?p <${nodeToDelete.uri}> . }
+      `;
+    }
 
     try {
       const res = await fetchWithAuth('/api/sparql', {
@@ -3184,7 +3210,29 @@ SELECT ?s ?p ?o WHERE {
           <div style={{ background: 'var(--bg-mantle)', padding: '24px', borderRadius: '16px', width: '350px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--color-proyecto)' }}>
             <h2 style={{ color: 'var(--color-proyecto)' }}>⚠️ Advertencia de Eliminación</h2>
             <p>¿Estás seguro de que deseas eliminar el nodo <strong>{nodeToDelete.label}</strong>?</p>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Esta acción eliminará el nodo y todas sus conexiones asociadas del Triplestore de forma permanente. Esta acción no se puede deshacer.</p>
+            {(() => {
+              const isShareableNode = (
+                nodeToDelete.type.includes('Conference') ||
+                nodeToDelete.type.includes('Journal') ||
+                nodeToDelete.type.includes('Topic') ||
+                nodeToDelete.type.includes('Dataset') ||
+                nodeToDelete.type.includes('MediaObject')
+              );
+
+              if (isShareableNode && !isSuperAdmin) {
+                return (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>
+                    ℹ️ Como usuario regular, este nodo <strong>se quitará únicamente de tu lienzo personal</strong>. La conferencia/revista seguirá guardada en el banco general del sistema para que otros investigadores puedan seguir utilizándola.
+                  </p>
+                );
+              } else {
+                return (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Esta acción eliminará el nodo y todas sus conexiones asociadas del Triplestore de forma permanente para todo el sistema. Esta acción no se puede deshacer.
+                  </p>
+                );
+              }
+            })()}
             <div className="flex-row flex-space" style={{ marginTop: '10px' }}>
               <button className="btn" onClick={() => setNodeToDelete(null)}>Cancelar</button>
               <button className="btn btn-primary" style={{ backgroundColor: 'var(--color-proyecto)', color: '#fff' }} onClick={deleteNode}>Aceptar</button>
