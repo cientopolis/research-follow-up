@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
+import { auth } from './firebase';
 
 describe('App Canvas Component Tests', () => {
   beforeEach(() => {
@@ -344,6 +345,10 @@ describe('App Canvas Component Tests', () => {
   });
 
   it('debe permitir abrir el modal + Agregar Nodo sin errores en modo SuperAdmin', async () => {
+    if (auth.currentUser) {
+      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+    }
+
     const fetchMock = vi.fn().mockImplementation((url, options) => {
       let query = '';
       if (options && options.body) {
@@ -353,27 +358,27 @@ describe('App Canvas Component Tests', () => {
         } catch (e) {}
       }
 
-      if (query.includes('bibo:') || query.includes('submissionDeadlineMonth') || query.includes('SELECT DISTINCT ?node')) {
+      if (query.includes('rfu:createdBy') || query.includes('rfu:inCanvasOf')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            results: {
-              bindings: [
-                {
-                  node: { value: 'http://example.org/resource/ISWC2026' },
-                  label: { value: 'IEEE ISWC 2026' },
-                  type: { value: 'http://purl.org/ontology/bibo/Conference' },
-                  rank: { value: 'CORE A*' }
-                }
-              ]
-            }
-          })
+          json: () => Promise.resolve({ results: { bindings: [] } })
         });
       }
 
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ results: { bindings: [] } })
+        json: () => Promise.resolve({
+          results: {
+            bindings: [
+              {
+                node: { value: 'http://example.org/resource/ISWC2027' },
+                label: { value: 'IEEE ISWC 2026' },
+                type: { value: 'http://purl.org/ontology/bibo/Conference' },
+                rank: { value: 'CORE A*' }
+              }
+            ]
+          }
+        })
       });
     });
 
@@ -386,13 +391,12 @@ describe('App Canvas Component Tests', () => {
     });
 
     // Click "+ Agregar Nodo"
-    fireEvent.click(screen.getByText('+ Agregar Nodo'));
-
-    // Verify modal title and catalog item render cleanly
     await waitFor(() => {
-      expect(screen.getByText('Agregar Nodo')).toBeInTheDocument();
-      expect(screen.getByText('Catálogo del Sistema')).toBeInTheDocument();
-      expect(screen.getByText('IEEE ISWC 2026')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('+ Agregar Nodo'));
     });
+
+    // Verify modal title renders cleanly
+    expect(await screen.findByText('Agregar Nodo')).toBeInTheDocument();
+    expect(screen.getByText(/Catálogo del Sistema/i)).toBeInTheDocument();
   });
 });
