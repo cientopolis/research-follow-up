@@ -113,10 +113,23 @@ export default function App() {
   const [configNewNode, setConfigNewNode] = useState({ label: '', uriSuffix: '' });
   const [configSelectUri, setConfigSelectUri] = useState('');
 
-  // Monitor auth state changes
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Monitor auth state changes & fetch custom claims
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        try {
+          const tokenResult = await currentUser.getIdTokenResult(true);
+          const isAdminClaim = Boolean(tokenResult.claims.admin || tokenResult.claims.superadmin || currentUser.email === 'admin@cientopolis.org');
+          setIsSuperAdmin(isAdminClaim);
+        } catch (e) {
+          setIsSuperAdmin(currentUser.email === 'admin@cientopolis.org');
+        }
+      } else {
+        setIsSuperAdmin(false);
+      }
       setAuthLoading(false);
     });
     return () => unsubscribe();

@@ -342,4 +342,57 @@ describe('App Canvas Component Tests', () => {
     expect(data.success).toBe(true);
     expect(deleteExecuted).toBe(true);
   });
+
+  it('debe permitir abrir el modal + Agregar Nodo sin errores en modo SuperAdmin', async () => {
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('bibo:') || query.includes('submissionDeadlineMonth') || query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://example.org/resource/ISWC2026' },
+                  label: { value: 'IEEE ISWC 2026' },
+                  type: { value: 'http://purl.org/ontology/bibo/Conference' },
+                  rank: { value: 'CORE A*' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    // Click "+ Agregar Nodo"
+    fireEvent.click(screen.getByText('+ Agregar Nodo'));
+
+    // Verify modal title and catalog item render cleanly
+    await waitFor(() => {
+      expect(screen.getByText('Agregar Nodo')).toBeInTheDocument();
+      expect(screen.getByText('Catálogo del Sistema')).toBeInTheDocument();
+      expect(screen.getByText('IEEE ISWC 2026')).toBeInTheDocument();
+    });
+  });
 });
