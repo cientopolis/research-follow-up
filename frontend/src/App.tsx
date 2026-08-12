@@ -264,10 +264,11 @@ SELECT ?s ?p ?o WHERE {
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
       SELECT DISTINCT ?topic ?label WHERE {
-        ?topic rdfs:label ?label .
-        FILTER(CONTAINS(LOWER(STR(?label)), LOWER("${term}")))
-        FILTER(STRSTARTS(STR(?topic), "http://cso.kmi.open.ac.uk/"))
-      } LIMIT 20
+        ?topic rdfs:label ?l .
+        FILTER(CONTAINS(LOWER(STR(?l)), LOWER("${term}")))
+        FILTER(STRSTARTS(STR(?topic), "https://cso.kmi.open.ac.uk/") || STRSTARTS(STR(?topic), "http://cso.kmi.open.ac.uk/"))
+        BIND(STR(?l) AS ?label)
+      } LIMIT 25
     `;
 
     try {
