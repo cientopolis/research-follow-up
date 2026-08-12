@@ -80,22 +80,26 @@ describe('App Canvas Component Tests', () => {
     fireEvent.click(addButton);
 
     // Verify modal is open
-    expect(screen.getByText('Agregar Nuevo Nodo')).toBeInTheDocument();
+    expect(screen.getByText('Agregar Nodo')).toBeInTheDocument();
+
+    // Switch to "Crear Nuevo Nodo" tab
+    const createTab = screen.getByText('➕ Crear Nuevo Nodo');
+    fireEvent.click(createTab);
 
     // Fill in form inputs
-    const labelInput = screen.getByPlaceholderText('Ej: Dr. Gomez');
-    const suffixInput = screen.getByPlaceholderText('Ej: JuanPerez');
+    const labelInput = screen.getByPlaceholderText('Ej: Dr. Gomez o IEEE ISWC 2026');
+    const suffixInput = screen.getByPlaceholderText('Ej: JuanPerez o ISWC2026');
 
     fireEvent.change(labelInput, { target: { value: 'Juan Perez' } });
     fireEvent.change(suffixInput, { target: { value: 'JuanPerez' } });
 
-    // Click "Crear Nodo" button inside modal
-    const createButton = screen.getByText('Crear Nodo');
+    // Click "Crear y Agregar Nodo" button inside modal
+    const createButton = screen.getByText('Crear y Agregar Nodo');
     fireEvent.click(createButton);
 
     // Verify the modal closes and the new node is fetched and rendered in the canvas
     await waitFor(() => {
-      expect(screen.queryByText('Agregar Nuevo Nodo')).not.toBeInTheDocument();
+      expect(screen.queryByText('Agregar Nodo')).not.toBeInTheDocument();
     });
 
     await waitFor(() => {

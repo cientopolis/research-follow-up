@@ -230,12 +230,72 @@ SELECT ?s ?p ?o WHERE {
   const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Título`);
   const [activeMindmapNode, setActiveMindmapNode] = useState<RDFNode | null>(null);
 
+  // Catalog / Shared Node Bank state
+  const [nodeModeTab, setNodeModeTab] = useState<'catalog' | 'new'>('catalog');
+  const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; subject?: string; externalUrl?: string }[]>([]);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+
   // SuperAdmin User Management Modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
 
 
 
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Fetch Global Catalog of Shareable Nodes (Conferences, Journals, Topics, Datasets, etc.)
+  const fetchGlobalCatalog = async (targetType: string) => {
+    setIsLoadingCatalog(true);
+    let finalType = targetType;
+    if (targetType === 'http://purl.org/ontology/bibo/Thesis#PhD' || targetType === 'http://purl.org/ontology/bibo/Thesis#Master') {
+      finalType = 'http://purl.org/ontology/bibo/Thesis';
+    }
+
+    const query = `
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX bibo: <http://purl.org/ontology/bibo/>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+      PREFIX schema: <http://schema.org/>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+      SELECT DISTINCT ?node ?label ?type ?rank ?subject ?externalUrl WHERE {
+        ?node rdf:type <${finalType}> .
+        ?node rdfs:label ?label .
+        OPTIONAL { ?node rdf:type ?type . FILTER(?type != <http://www.w3.org/2000/01/rdf-schema#Resource>) }
+        OPTIONAL { ?node bibo:rank ?rank }
+        OPTIONAL { ?node dcterms:subject ?subject }
+        OPTIONAL { ?node schema:url ?url1 }
+        OPTIONAL { ?node foaf:page ?url2 }
+        BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+        FILTER(STRSTARTS(STR(?node), "http://example.org/"))
+      } LIMIT 100
+    `;
+
+    try {
+      const response = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, infer: true })
+      });
+      const data = await response.json();
+      if (data.results && data.results.bindings) {
+        const catalogList = data.results.bindings.map((b: any) => ({
+          uri: b.node.value,
+          label: b.label.value,
+          type: b.type ? b.type.value : targetType,
+          rank: b.rank ? b.rank.value : undefined,
+          subject: b.subject ? b.subject.value : undefined,
+          externalUrl: b.externalUrl ? b.externalUrl.value : undefined,
+        }));
+        setGlobalCatalogNodes(catalogList);
+      }
+    } catch (e) {
+      console.error('Error al cargar catálogo global', e);
+    } finally {
+      setIsLoadingCatalog(false);
+    }
+  };
 
   // Load data from GraphDB
   const fetchGraphData = async () => {
@@ -252,7 +312,7 @@ SELECT ?s ?p ?o WHERE {
 
       SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl WHERE {
         ?node rdf:type ?type .
-        ?node rfu:createdBy <${userUri}> .
+        { ?node rfu:createdBy <${userUri}> } UNION { ?node rfu:inCanvasOf <${userUri}> }
         ?node rdfs:label ?label .
         OPTIONAL { ?node ex:posX ?x }
         OPTIONAL { ?node ex:posY ?y }
@@ -921,6 +981,52 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
+  // Add an existing global catalog node to current user's canvas
+  const addExistingNodeToCanvas = async (nodeUri: string) => {
+    if (!user) return;
+    const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    
+    // Position at canvas center or offset if quick-connecting
+    let x = Math.round((-pan.x + window.innerWidth / 2) / zoom);
+    let y = Math.round((-pan.y + window.innerHeight / 2) / zoom);
+    if (quickConnectSourceUri) {
+      const srcNode = nodes.find(n => n.uri === quickConnectSourceUri);
+      x = srcNode ? srcNode.x + 210 : x;
+      y = srcNode ? srcNode.y : y;
+    }
+
+    const insertQuery = `
+      PREFIX ex: <http://example.org/resource/>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+      
+      INSERT DATA {
+        <${nodeUri}> rfu:inCanvasOf <${userUri}> ;
+                     ex:posX ${x} ;
+                     ex:posY ${y} .
+      }
+    `;
+
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: insertQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowNewNodeModal(false);
+        await fetchGraphData();
+        if (quickConnectSourceUri) {
+          setPendingConnectionTarget(nodeUri);
+          setSelectedRelationPredicate('http://vivoweb.org/ontology/core#publicationVenue');
+          setShowRelationModal(true);
+        }
+      }
+    } catch (e) {
+      console.error('Error al incorporar nodo existente al lienzo', e);
+    }
+  };
+
   // Create Node
   const createNode = async () => {
     if (!newNodeData.label || !newNodeData.uriSuffix) return;
@@ -1310,7 +1416,10 @@ SELECT ?s ?p ?o WHERE {
           
           <div style={{ position: 'relative' }}>
             {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
-            <button className="btn btn-primary" onClick={() => setShowNewNodeModal(true)}>+ Agregar Nodo</button>
+            <button className="btn btn-primary" onClick={() => {
+              setShowNewNodeModal(true);
+              fetchGlobalCatalog(newNodeData.type);
+            }}>+ Agregar Nodo</button>
           </div>
           
           {nodes.length === 0 && (
@@ -2374,19 +2483,26 @@ SELECT ?s ?p ?o WHERE {
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center',
           alignItems: 'center', zIndex: 500
         }}>
-          <div style={{ background: 'var(--bg-mantle)', padding: '24px', borderRadius: '16px', width: '350px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h2>Agregar Nuevo Nodo</h2>
-            <div className="form-group">
-              <label>Etiqueta / Nombre</label>
-              <input type="text" placeholder="Ej: Dr. Gomez" value={newNodeData.label} onChange={(e) => setNewNodeData({ ...newNodeData, label: e.target.value })} />
+          <div style={{ background: 'var(--bg-mantle)', padding: '24px', borderRadius: '16px', width: '440px', maxWidth: '92vw', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--border-color)', boxShadow: '0 12px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Agregar Nodo</h2>
+              <button className="btn btn-sm" onClick={() => setShowNewNodeModal(false)}>✕</button>
             </div>
+
             <div className="form-group">
               <label>Tipo Semántico</label>
-              <select value={newNodeData.type} onChange={(e) => setNewNodeData({ ...newNodeData, type: e.target.value })}>
-                <option value="http://vivoweb.org/ontology/core#FacultyMember">Investigador (vivo:FacultyMember)</option>
-                <option value="http://vivoweb.org/ontology/core#GraduateStudent">Tesista de Posgrado (vivo:GraduateStudent)</option>
-                <option value="http://vivoweb.org/ontology/core#UndergraduateStudent">Tesista de Grado (vivo:UndergraduateStudent)</option>
-                <option value="http://vivoweb.org/ontology/core#Project">Proyecto (vivo:Project)</option>
+              <select
+                value={newNodeData.type}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  setNewNodeData({ ...newNodeData, type: newType });
+                  // Trigger catalog fetch if type is shareable
+                  fetchGlobalCatalog(newType);
+                }}
+              >
+                <option value="http://purl.org/ontology/bibo/Conference">🎤 Conferencia (bibo:Conference)</option>
+                <option value="http://purl.org/ontology/bibo/Journal">📰 Revista / Journal (bibo:Journal)</option>
+                <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
                 <option value="http://purl.org/ontology/bibo/DocumentDraft">📝 Paper a escribir (bibo:DocumentDraft)</option>
                 <option value="http://purl.org/ontology/bibo/AcademicArticle">📚 Paper ya escrito / Referencia (bibo:AcademicArticle)</option>
                 <option value="https://dblp.org/rdf/schema#Article">Paper (dblp:Article)</option>
@@ -2395,22 +2511,132 @@ SELECT ?s ?p ?o WHERE {
                 <option value="http://schema.org/Dataset">📋 Tabla / Datos (schema:Dataset)</option>
                 <option value="http://schema.org/MediaObject">📄 Archivo (schema:MediaObject)</option>
                 <option value="http://vivoweb.org/ontology/core#Meeting">📅 Reunión / Minutas (vivo:Meeting)</option>
-                <option value="http://purl.org/ontology/bibo/Conference">🎤 Conferencia (bibo:Conference)</option>
-                <option value="http://purl.org/ontology/bibo/Journal">📰 Revista / Journal (bibo:Journal)</option>
-                <option value="http://cso.kmi.open.ac.uk/schema/cso#Topic">Tópico CSO (cso:Topic)</option>
+                <option value="http://vivoweb.org/ontology/core#FacultyMember">Investigador (vivo:FacultyMember)</option>
+                <option value="http://vivoweb.org/ontology/core#GraduateStudent">Tesista de Posgrado (vivo:GraduateStudent)</option>
+                <option value="http://vivoweb.org/ontology/core#UndergraduateStudent">Tesista de Grado (vivo:UndergraduateStudent)</option>
+                <option value="http://vivoweb.org/ontology/core#Project">Proyecto (vivo:Project)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#PhD">Tesis Doctoral (PhD Thesis)</option>
                 <option value="http://purl.org/ontology/bibo/Thesis#Master">Tesis de Maestría (Magister)</option>
                 <option value="http://cientopolis.org/rfu/Mindmap">🧠 Mapa Mental (rfu:Mindmap)</option>
               </select>
             </div>
-            <div className="form-group">
-              <label>Sufijo de URI</label>
-              <input type="text" placeholder="Ej: JuanPerez" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
+
+            {/* Tabs Selector: "Seleccionar del Catálogo del Sistema" vs "Crear Nuevo Nodo" */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', pb: '8px' }}>
+              <button
+                className={`btn btn-sm ${nodeModeTab === 'catalog' ? 'btn-primary' : ''}`}
+                onClick={() => {
+                  setNodeModeTab('catalog');
+                  fetchGlobalCatalog(newNodeData.type);
+                }}
+                style={{ flex: 1, padding: '8px', fontSize: '0.8rem' }}
+              >
+                🔍 Catálogo del Sistema
+              </button>
+              <button
+                className={`btn btn-sm ${nodeModeTab === 'new' ? 'btn-primary' : ''}`}
+                onClick={() => setNodeModeTab('new')}
+                style={{ flex: 1, padding: '8px', fontSize: '0.8rem' }}
+              >
+                ➕ Crear Nuevo Nodo
+              </button>
             </div>
-            <div className="flex-row flex-space" style={{ marginTop: '10px' }}>
-              <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={createNode}>Crear Nodo</button>
-            </div>
+
+            {/* TAB 1: Seleccionar del Catálogo Compartido del Sistema */}
+            {nodeModeTab === 'catalog' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="form-group">
+                  <label style={{ fontSize: '0.78rem' }}>🔍 Buscar en el Banco General ({getCleanType(newNodeData.type)})</label>
+                  <input
+                    type="text"
+                    placeholder="Filtrar por nombre, ranking (CORE A*, Q1, etc.) o palabras clave..."
+                    value={catalogSearchQuery}
+                    onChange={(e) => setCatalogSearchQuery(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: '0.82rem' }}
+                  />
+                </div>
+
+                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '8px', background: 'var(--bg-surface)' }}>
+                  {isLoadingCatalog ? (
+                    <div style={{ padding: '16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>⏳ Cargando catálogo general del sistema...</div>
+                  ) : (() => {
+                    // Exclude nodes already on user canvas
+                    const canvasUris = new Set(nodes.map(n => n.uri));
+                    const filtered = globalCatalogNodes.filter(n => {
+                      if (canvasUris.has(n.uri)) return false;
+                      const q = catalogSearchQuery.toLowerCase().trim();
+                      if (!q) return true;
+                      return (
+                        n.label.toLowerCase().includes(q) ||
+                        (n.rank && n.rank.toLowerCase().includes(q)) ||
+                        (n.subject && n.subject.toLowerCase().includes(q)) ||
+                        (n.externalUrl && n.externalUrl.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div style={{ padding: '16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <span>No se encontraron {getCleanType(newNodeData.type)} disponibles en el catálogo general.</span>
+                          <button className="btn btn-sm btn-primary" onClick={() => setNodeModeTab('new')} style={{ alignSelf: 'center' }}>
+                            ➕ Crear {getCleanType(newNodeData.type)} en el Sistema
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((item) => (
+                      <div
+                        key={item.uri}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          background: 'var(--bg-mantle)',
+                          border: '1px solid var(--border-color)',
+                          gap: '10px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
+                          <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {item.rank && <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>}
+                            {item.subject && <span>{item.subject}</span>}
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => addExistingNodeToCanvas(item.uri)}
+                          style={{ padding: '5px 10px', fontSize: '0.75rem', flexShrink: 0 }}
+                        >
+                          ➕ Agregar a mi lienzo
+                        </button>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Crear Nuevo Nodo en la Base del Sistema */}
+            {nodeModeTab === 'new' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="form-group">
+                  <label>Etiqueta / Nombre</label>
+                  <input type="text" placeholder="Ej: Dr. Gomez o IEEE ISWC 2026" value={newNodeData.label} onChange={(e) => setNewNodeData({ ...newNodeData, label: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Sufijo de URI</label>
+                  <input type="text" placeholder="Ej: JuanPerez o ISWC2026" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
+                </div>
+                <div className="flex-row flex-space" style={{ marginTop: '6px' }}>
+                  <button className="btn" onClick={() => setShowNewNodeModal(false)}>Cancelar</button>
+                  <button className="btn btn-primary" onClick={createNode}>Crear y Agregar Nodo</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
