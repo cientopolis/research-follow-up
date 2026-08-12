@@ -213,4 +213,66 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText('Este sos vos')).toBeInTheDocument();
     });
   });
+
+  it('debe permitir buscar y autocompletar tópicos CSO desplegando sugerencias', async () => {
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      const body = JSON.parse(options.body);
+      const query = body.query;
+
+      if (query.includes('rdfs:label') && query.includes('CONTAINS')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  topic: { value: 'https://cso.kmi.open.ac.uk/topics/semantic_web' },
+                  label: { value: 'Semantic Web' }
+                },
+                {
+                  topic: { value: 'https://cso.kmi.open.ac.uk/topics/semantic_data' },
+                  label: { value: 'Semantic Data' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    // Open "+ Agregar Nodo" modal
+    fireEvent.click(screen.getByText('+ Agregar Nodo'));
+
+    // Switch to "➕ Crear Nuevo Nodo" tab
+    fireEvent.click(screen.getByText('➕ Crear Nuevo Nodo'));
+
+    // Type "semantic" into CSO Topics input
+    const csoInput = screen.getByPlaceholderText(/Escriba para autocompletar tópicos CSO/i);
+    fireEvent.change(csoInput, { target: { value: 'semantic' } });
+
+    // Verify recommendations dropdown renders
+    await waitFor(() => {
+      expect(screen.getByText('Semantic Web')).toBeInTheDocument();
+      expect(screen.getByText('Semantic Data')).toBeInTheDocument();
+    });
+
+    // Click to select suggestion
+    fireEvent.click(screen.getByText('Semantic Web'));
+
+    // Verify chip is rendered
+    expect(screen.getByText('🏷️ Semantic Web')).toBeInTheDocument();
+  });
 });

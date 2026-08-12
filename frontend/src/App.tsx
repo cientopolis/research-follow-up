@@ -266,7 +266,6 @@ SELECT ?s ?p ?o WHERE {
       SELECT DISTINCT ?topic ?label WHERE {
         ?topic rdfs:label ?l .
         FILTER(CONTAINS(LOWER(STR(?l)), LOWER("${term}")))
-        FILTER(STRSTARTS(STR(?topic), "https://cso.kmi.open.ac.uk/") || STRSTARTS(STR(?topic), "http://cso.kmi.open.ac.uk/"))
         BIND(STR(?l) AS ?label)
       } LIMIT 25
     `;
