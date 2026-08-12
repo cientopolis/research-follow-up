@@ -9,6 +9,7 @@ import { IconPicker } from './components/IconPicker';
 import { AvatarPicker } from './components/AvatarPicker';
 import { MindmapCanvas } from './components/MindmapCanvas';
 import { AdminUsersModal } from './components/AdminUsersModal';
+import { AdminCatalogPanel } from './components/AdminCatalogPanel';
 
 interface RDFNode {
   uri: string;
@@ -257,6 +258,9 @@ SELECT ?s ?p ?o WHERE {
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [editingCatalogNode, setEditingCatalogNode] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } | null>(null);
+
+  // View switcher state: 'canvas' vs 'admin-catalog'
+  const [currentView, setCurrentView] = useState<'canvas' | 'admin-catalog'>('canvas');
 
   // SuperAdmin User Management Modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -1602,23 +1606,65 @@ SELECT ?s ?p ?o WHERE {
         position: 'relative',
         flexShrink: 0
       }}>
-        {/* Left Side: Title and Node Actions */}
+        {/* Left Side: Title, View Switcher and Node Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+          <h1 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em', color: 'var(--text-main)', cursor: 'pointer' }} onClick={() => setCurrentView('canvas')}>
             <span style={{ fontWeight: 700, color: 'var(--color-investigador)' }}>Dire</span>
             <span style={{ fontWeight: 400, color: 'var(--accent)' }}>Atento</span>
           </h1>
-          
-          <div style={{ position: 'relative' }}>
-            {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
-            <button className="btn btn-primary" onClick={() => {
-              setEditingCatalogNode(null);
-              setShowNewNodeModal(true);
-              fetchGlobalCatalog(newNodeData.type);
-            }}>+ Agregar Nodo</button>
+
+          {/* Navigation View Switcher Tabs */}
+          <div style={{ display: 'flex', background: 'var(--bg-mantle)', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setCurrentView('canvas')}
+              style={{
+                background: currentView === 'canvas' ? 'var(--bg-surface)' : 'transparent',
+                color: currentView === 'canvas' ? 'var(--text-main)' : 'var(--text-muted)',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: currentView === 'canvas' ? 600 : 400,
+                cursor: 'pointer',
+                boxShadow: currentView === 'canvas' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s'
+              }}
+            >
+              🎨 Lienzo de Investigación
+            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={() => setCurrentView('admin-catalog')}
+                style={{
+                  background: currentView === 'admin-catalog' ? 'var(--bg-surface)' : 'transparent',
+                  color: currentView === 'admin-catalog' ? 'var(--color-investigador)' : 'var(--text-muted)',
+                  border: 'none',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: currentView === 'admin-catalog' ? 700 : 400,
+                  cursor: 'pointer',
+                  boxShadow: currentView === 'admin-catalog' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.2s'
+                }}
+              >
+                👑 Gestión del Catálogo (Admin)
+              </button>
+            )}
           </div>
-          
-          {nodes.length === 0 && (
+
+          {currentView === 'canvas' && (
+            <div style={{ position: 'relative' }}>
+              {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
+              <button className="btn btn-primary" onClick={() => {
+                setEditingCatalogNode(null);
+                setShowNewNodeModal(true);
+                fetchGlobalCatalog(newNodeData.type);
+              }}>+ Agregar Nodo</button>
+            </div>
+          )}
+
+          {currentView === 'canvas' && nodes.length === 0 && (
             <button className="btn" onClick={loadSeedData}>Cargar Semilla Inicial</button>
           )}
         </div>
@@ -1792,18 +1838,29 @@ SELECT ?s ?p ?o WHERE {
         </div>
       </div>
 
-      {/* Main Content Area (Canvas & Sidebars) */}
+      {/* Main Content Area (Canvas / Admin Catalog Panel & Sidebars) */}
       <div style={{ display: 'flex', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
-      {/* Main Interactive Canvas */}
-      <div 
-        id="canvasMain" 
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onWheel={handleWheel}
-      >
+      {/* Admin Shared Catalog Management View */}
+      {currentView === 'admin-catalog' && isSuperAdmin ? (
+        <AdminCatalogPanel
+          fetchWithAuth={fetchWithAuth}
+          STATIC_CSO_TOPICS={STATIC_CSO_TOPICS}
+          fetchCSOTopics={fetchCSOTopics}
+          csoTopicsList={csoTopicsList}
+          isFetchingCSO={isFetchingCSO}
+        />
+      ) : (
+        <>
+        {/* Main Interactive Canvas */}
+        <div 
+          id="canvasMain" 
+          ref={canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onWheel={handleWheel}
+        >
         {isDev && <span className="dev-tag-badge">#canvasMain</span>}
         <div 
           className="canvas-viewport"
@@ -2670,6 +2727,8 @@ SELECT ?s ?p ?o WHERE {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* Modal Agregar Nodo */}

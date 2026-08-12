@@ -399,4 +399,67 @@ describe('App Canvas Component Tests', () => {
     expect(await screen.findByText('Agregar Nodo')).toBeInTheDocument();
     expect(screen.getByText(/Catálogo del Sistema/i)).toBeInTheDocument();
   });
+
+  it('debe permitir a un SuperAdmin cambiar a la vista de Gestión del Catálogo y navegar entre categorías', async () => {
+    if (auth.currentUser) {
+      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+    }
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('rfu:createdBy') || query.includes('rfu:inCanvasOf')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ results: { bindings: [] } })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          results: {
+            bindings: [
+              {
+                node: { value: 'http://example.org/resource/ISWC2026' },
+                label: { value: 'International Semantic Web Conference 2026' },
+                type: { value: 'http://purl.org/ontology/bibo/Conference' },
+                rank: { value: 'CORE A*' }
+              }
+            ]
+          }
+        })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    // Verify Admin Catalog Switcher tab exists for SuperAdmin
+    const adminTabBtn = screen.getByText(/Gestión del Catálogo \(Admin\)/i);
+    expect(adminTabBtn).toBeInTheDocument();
+
+    // Switch to Admin Catalog view
+    fireEvent.click(adminTabBtn);
+
+    // Verify Admin Catalog panel header and category tabs
+    await waitFor(() => {
+      expect(screen.getByText(/Gestor del Catálogo Compartido/i)).toBeInTheDocument();
+      expect(screen.getByText('Conferencias')).toBeInTheDocument();
+      expect(screen.getByText('Revistas / Journals')).toBeInTheDocument();
+      expect(screen.getByText('Tópicos CSO')).toBeInTheDocument();
+      expect(screen.getByText('International Semantic Web Conference 2026')).toBeInTheDocument();
+    });
+  });
 });
