@@ -252,20 +252,45 @@ SELECT ?s ?p ?o WHERE {
   const [csoSearchQuery, setCsoSearchQuery] = useState('');
   const [isFetchingCSO, setIsFetchingCSO] = useState(false);
 
-  // Fetch CSO Topics from GraphDB (cso:Topic or rdfs:label)
+  // Static curated fallback topics list from CSO ontology for instant responsiveness
+  const STATIC_CSO_TOPICS = [
+    { uri: 'https://cso.kmi.open.ac.uk/topics/semantic_web', label: 'Semantic Web' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/artificial_intelligence', label: 'Artificial Intelligence' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/machine_learning', label: 'Machine Learning' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/data_mining', label: 'Data Mining' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/knowledge_graph', label: 'Knowledge Graph' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/ontologies', label: 'Ontologies' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/natural_language_processing', label: 'Natural Language Processing' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/computer_vision', label: 'Computer Vision' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/software_engineering', label: 'Software Engineering' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/information_retrieval', label: 'Information Retrieval' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/deep_learning', label: 'Deep Learning' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/robotics', label: 'Robotics' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/human_computer_interaction', label: 'Human Computer Interaction' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/computer_networks', label: 'Computer Networks' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/cloud_computing', label: 'Cloud Computing' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/cyber_security', label: 'Cyber Security' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/big_data', label: 'Big Data' },
+    { uri: 'https://cso.kmi.open.ac.uk/topics/bioinformatics', label: 'Bioinformatics' },
+  ];
+
+  // Fetch CSO Topics from GraphDB with static fallback
   const fetchCSOTopics = async (search: string) => {
-    const term = (search || '').trim().replace(/"/g, '');
-    if (term.length < 1) {
-      setCsoTopicsList([]);
-      return;
-    }
+    const term = (search || '').trim().toLowerCase();
+    
+    // Instant local filtering first so suggestions appear immediately
+    const filteredStatic = STATIC_CSO_TOPICS.filter(t => !term || t.label.toLowerCase().includes(term));
+    setCsoTopicsList(filteredStatic);
+
+    if (term.length < 1) return;
     setIsFetchingCSO(true);
+
     const query = `
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
       SELECT DISTINCT ?topic ?label WHERE {
         ?topic rdfs:label ?l .
-        FILTER(CONTAINS(LOWER(STR(?l)), LOWER("${term}")))
+        FILTER(CONTAINS(LOWER(STR(?l)), "${term}"))
         BIND(STR(?l) AS ?label)
       } LIMIT 25
     `;
@@ -277,16 +302,20 @@ SELECT ?s ?p ?o WHERE {
         body: JSON.stringify({ query, infer: true })
       });
       const data = await response.json();
-      if (data.results && data.results.bindings) {
+      if (data.results && data.results.bindings && data.results.bindings.length > 0) {
         const topics = data.results.bindings.map((b: any) => ({
           uri: b.topic.value,
           label: b.label.value
         }));
-        setCsoTopicsList(topics);
+        // Combine static fallback with GraphDB query results without duplicates
+        const existingUris = new Set(topics.map((t: any) => t.uri));
+        const merged = [...topics, ...filteredStatic.filter(t => !existingUris.has(t.uri))];
+        setCsoTopicsList(merged);
       }
     } catch (e) {
       console.error('Error al consultar tópicos CSO', e);
     } finally {
+      setIsLoadingCatalog(false);
       setIsFetchingCSO(false);
     }
   };
@@ -2559,7 +2588,7 @@ SELECT ?s ?p ?o WHERE {
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center',
           alignItems: 'center', zIndex: 500
         }}>
-          <div style={{ background: 'var(--bg-mantle)', padding: '24px', borderRadius: '16px', width: '440px', maxWidth: '92vw', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--border-color)', boxShadow: '0 12px 32px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: 'var(--bg-mantle)', padding: '24px', borderRadius: '16px', width: '440px', maxWidth: '92vw', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--border-color)', boxShadow: '0 12px 32px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Agregar Nodo</h2>
               <button className="btn btn-sm" onClick={() => setShowNewNodeModal(false)}>✕</button>
