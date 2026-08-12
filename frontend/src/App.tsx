@@ -1599,6 +1599,7 @@ SELECT ?s ?p ?o WHERE {
           <div style={{ position: 'relative' }}>
             {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
             <button className="btn btn-primary" onClick={() => {
+              setEditingCatalogNode(null);
               setShowNewNodeModal(true);
               fetchGlobalCatalog(newNodeData.type);
             }}>+ Agregar Nodo</button>
@@ -2704,7 +2705,7 @@ SELECT ?s ?p ?o WHERE {
             </div>
 
             {/* Tabs Selector: "Seleccionar del Catálogo del Sistema" vs "Crear Nuevo Nodo" */}
-            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', pb: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
               <button
                 className={`btn btn-sm ${nodeModeTab === 'catalog' ? 'btn-primary' : ''}`}
                 onClick={() => {
