@@ -2743,17 +2743,17 @@ SELECT ?s ?p ?o WHERE {
                     <div style={{ padding: '16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>⏳ Cargando catálogo general del sistema...</div>
                   ) : (() => {
                     // Exclude nodes already on user canvas
-                    const canvasUris = new Set(nodes.map(n => n.uri));
-                    const filtered = globalCatalogNodes.filter(n => {
+                    const canvasUris = new Set((nodes || []).map(n => n.uri));
+                    const filtered = (globalCatalogNodes || []).filter(n => {
+                      if (!n || !n.uri) return false;
                       if (canvasUris.has(n.uri)) return false;
                       const q = catalogSearchQuery.toLowerCase().trim();
                       if (!q) return true;
-                      return (
-                        n.label.toLowerCase().includes(q) ||
-                        (n.rank && n.rank.toLowerCase().includes(q)) ||
-                        (n.subject && n.subject.toLowerCase().includes(q)) ||
-                        (n.externalUrl && n.externalUrl.toLowerCase().includes(q))
-                      );
+                      const labelMatch = (n.label || '').toLowerCase().includes(q);
+                      const rankMatch = (n.rank || '').toLowerCase().includes(q);
+                      const subjectMatch = (n.subject || '').toLowerCase().includes(q);
+                      const urlMatch = (n.externalUrl || '').toLowerCase().includes(q);
+                      return labelMatch || rankMatch || subjectMatch || urlMatch;
                     });
 
                     if (filtered.length === 0) {
@@ -2822,8 +2822,8 @@ SELECT ?s ?p ?o WHERE {
                               <label style={{ fontSize: '0.72rem' }}>Nombre / Etiqueta</label>
                               <input
                                 type="text"
-                                value={editingCatalogNode.label}
-                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, label: e.target.value })}
+                                value={editingCatalogNode?.label || ''}
+                                onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, label: e.target.value })}
                                 style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                               />
                             </div>
@@ -2831,8 +2831,8 @@ SELECT ?s ?p ?o WHERE {
                               <div className="form-group">
                                 <label style={{ fontSize: '0.72rem' }}>Ranking</label>
                                 <select
-                                  value={editingCatalogNode.rank || ''}
-                                  onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
+                                  value={editingCatalogNode?.rank || ''}
+                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
                                   style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                                 >
                                   <option value="">-- Sin Ranking --</option>
@@ -2850,8 +2850,8 @@ SELECT ?s ?p ?o WHERE {
                                 <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
                                 <input
                                   type="text"
-                                  value={editingCatalogNode.deadlineMonth || ''}
-                                  onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
+                                  value={editingCatalogNode?.deadlineMonth || ''}
+                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
                                   placeholder="Ej: Marzo"
                                   style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                                 />
@@ -2861,8 +2861,8 @@ SELECT ?s ?p ?o WHERE {
                               <label style={{ fontSize: '0.72rem' }}>URL Oficial</label>
                               <input
                                 type="text"
-                                value={editingCatalogNode.externalUrl || ''}
-                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, externalUrl: e.target.value })}
+                                value={editingCatalogNode?.externalUrl || ''}
+                                onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, externalUrl: e.target.value })}
                                 placeholder="https://..."
                                 style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                               />
@@ -2871,8 +2871,8 @@ SELECT ?s ?p ?o WHERE {
                               <label style={{ fontSize: '0.72rem' }}>Temáticas (CSO)</label>
                               <input
                                 type="text"
-                                value={editingCatalogNode.subject || ''}
-                                onChange={(e) => setEditingCatalogNode({ ...editingCatalogNode, subject: e.target.value })}
+                                value={editingCatalogNode?.subject || ''}
+                                onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, subject: e.target.value })}
                                 placeholder="Semantic Web, Artificial Intelligence"
                                 style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                               />
