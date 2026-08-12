@@ -254,20 +254,20 @@ SELECT ?s ?p ?o WHERE {
 
   // Fetch CSO Topics from GraphDB (cso:Topic or rdfs:label)
   const fetchCSOTopics = async (search: string) => {
-    if (!search || search.trim().length < 2) {
+    const term = (search || '').trim().replace(/"/g, '');
+    if (term.length < 1) {
       setCsoTopicsList([]);
       return;
     }
     setIsFetchingCSO(true);
     const query = `
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX cso: <http://cso.kmi.open.ac.uk/schema/cso#>
 
       SELECT DISTINCT ?topic ?label WHERE {
-        { ?topic a cso:Topic } UNION { ?topic a <http://cso.kmi.open.ac.uk/schema/cso#Topic> }
         ?topic rdfs:label ?label .
-        FILTER(CONTAINS(LOWER(?label), LOWER("${search.replace(/"/g, '')}")))
-      } LIMIT 15
+        FILTER(CONTAINS(LOWER(STR(?label)), LOWER("${term}")))
+        FILTER(STRSTARTS(STR(?topic), "http://cso.kmi.open.ac.uk/"))
+      } LIMIT 20
     `;
 
     try {
@@ -2766,8 +2766,12 @@ SELECT ?s ?p ?o WHERE {
                       </label>
                       <input
                         type="text"
-                        placeholder="Escriba para autocompletar tópicos CSO (ej: Semantic Web, Machine Learning)..."
+                        placeholder="Escriba para autocompletar tópicos CSO (ej: semantic, machine, data)..."
                         value={csoSearchQuery}
+                        onFocus={() => {
+                          if (csoSearchQuery.trim().length >= 1) fetchCSOTopics(csoSearchQuery);
+                          else fetchCSOTopics('a'); // Default suggestions
+                        }}
                         onChange={(e) => {
                           const val = e.target.value;
                           setCsoSearchQuery(val);
@@ -2775,6 +2779,10 @@ SELECT ?s ?p ?o WHERE {
                         }}
                         style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: '0.82rem' }}
                       />
+
+                      {isFetchingCSO && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>⏳ Buscando en la ontología CSO...</div>
+                      )}
 
                       {/* Dropdown sugerencias CSO */}
                       {csoTopicsList.length > 0 && (
