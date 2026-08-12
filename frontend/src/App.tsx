@@ -247,6 +247,50 @@ SELECT ?s ?p ?o WHERE {
   // SuperAdmin User Management Modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
 
+  // CSO Topics Autocomplete State
+  const [csoTopicsList, setCsoTopicsList] = useState<{ uri: string; label: string }[]>([]);
+  const [csoSearchQuery, setCsoSearchQuery] = useState('');
+  const [isFetchingCSO, setIsFetchingCSO] = useState(false);
+
+  // Fetch CSO Topics from GraphDB (cso:Topic or rdfs:label)
+  const fetchCSOTopics = async (search: string) => {
+    if (!search || search.trim().length < 2) {
+      setCsoTopicsList([]);
+      return;
+    }
+    setIsFetchingCSO(true);
+    const query = `
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX cso: <http://cso.kmi.open.ac.uk/schema/cso#>
+
+      SELECT DISTINCT ?topic ?label WHERE {
+        { ?topic a cso:Topic } UNION { ?topic a <http://cso.kmi.open.ac.uk/schema/cso#Topic> }
+        ?topic rdfs:label ?label .
+        FILTER(CONTAINS(LOWER(?label), LOWER("${search.replace(/"/g, '')}")))
+      } LIMIT 15
+    `;
+
+    try {
+      const response = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, infer: true })
+      });
+      const data = await response.json();
+      if (data.results && data.results.bindings) {
+        const topics = data.results.bindings.map((b: any) => ({
+          uri: b.topic.value,
+          label: b.label.value
+        }));
+        setCsoTopicsList(topics);
+      }
+    } catch (e) {
+      console.error('Error al consultar tópicos CSO', e);
+    } finally {
+      setIsFetchingCSO(false);
+    }
+  };
+
 
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -2715,9 +2759,88 @@ SELECT ?s ?p ?o WHERE {
                       <input type="text" placeholder="Ej: https://iswc2026.semanticweb.org" value={newNodeData.externalUrl} onChange={(e) => setNewNodeData({ ...newNodeData, externalUrl: e.target.value })} />
                     </div>
 
-                    <div className="form-group">
-                      <label>🏷️ Temáticas / Áreas (dcterms:subject)</label>
-                      <input type="text" placeholder="Ej: Semantic Web, Knowledge Graphs, AI" value={newNodeData.subject} onChange={(e) => setNewNodeData({ ...newNodeData, subject: e.target.value })} />
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏷️ Temáticas CSO (cso:Topic)</span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Computer Science Ontology</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Escriba para autocompletar tópicos CSO (ej: Semantic Web, Machine Learning)..."
+                        value={csoSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCsoSearchQuery(val);
+                          fetchCSOTopics(val);
+                        }}
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: '0.82rem' }}
+                      />
+
+                      {/* Dropdown sugerencias CSO */}
+                      {csoTopicsList.length > 0 && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, width: '100%',
+                          maxHeight: '160px', overflowY: 'auto', background: 'var(--bg-mantle)',
+                          border: '1px solid var(--border-color)', borderRadius: '8px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 600, marginTop: '4px',
+                          display: 'flex', flexDirection: 'column'
+                        }}>
+                          {csoTopicsList.map(topic => (
+                            <div
+                              key={topic.uri}
+                              onClick={() => {
+                                // Add topic tag if not already in subject
+                                const currentSubjects = newNodeData.subject ? newNodeData.subject.split(',').map(s => s.trim()).filter(Boolean) : [];
+                                if (!currentSubjects.includes(topic.label)) {
+                                  const updated = [...currentSubjects, topic.label].join(', ');
+                                  setNewNodeData({ ...newNodeData, subject: updated });
+                                }
+                                setCsoSearchQuery('');
+                                setCsoTopicsList([]);
+                              }}
+                              style={{
+                                padding: '8px 12px', cursor: 'pointer', fontSize: '0.8rem',
+                                borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-surface)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{topic.label}</span>
+                              <span style={{ fontSize: '0.65rem', color: '#1a2b48', background: 'rgba(26,43,72,0.1)', padding: '1px 6px', borderRadius: '4px' }}>➕ Añadir</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Chips / Tópicos CSO Seleccionados */}
+                      {newNodeData.subject && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                          {newNodeData.subject.split(',').map(s => s.trim()).filter(Boolean).map(tag => (
+                            <span
+                              key={tag}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                background: 'rgba(163,217,201,0.25)', color: '#1B5346',
+                                border: '1px solid rgba(45,138,117,0.3)', padding: '2px 8px',
+                                borderRadius: '12px', fontSize: '0.72rem', fontWeight: 600
+                              }}
+                            >
+                              🏷️ {tag}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = newNodeData.subject.split(',').map(s => s.trim()).filter(t => t !== tag).join(', ');
+                                  setNewNodeData({ ...newNodeData, subject: updated });
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#1B5346', cursor: 'pointer', padding: 0, fontSize: '0.7rem', lineHeight: 1 }}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
