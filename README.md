@@ -31,6 +31,12 @@ research-follow-up/
 │   └── package.json           # Dependencias de frontend
 ├── server.js                  # Servidor backend Express (Proxy SPARQL)
 ├── import_ontologies.py       # Script autónomo en Python para subir ontologías a GraphDB
+├── docker/                    # Configuración aislada de Docker para despliegue en producción
+│   ├── Dockerfile             # Build multi-etapa (Frontend Vite + Backend Express)
+│   ├── docker-compose.yml     # Orquestación de GraphDB + App con persistencia
+│   ├── .env.production.example# Plantilla de variables para entorno productivo
+│   ├── deploy.sh              # Script de actualización gradual sin caídas
+│   └── README.md              # Guía detallada de puesta en producción y rollback
 ├── package.json               # Dependencias de backend
 ├── .env.example               # Plantilla de variables de entorno
 └── .env.local                 # Configuración de credenciales locales (excluido de Git)
@@ -131,6 +137,42 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Sonido de Foco (Tic-Tac)**: Sonido opcional y alternado (Tic/Tac en segundos pares/impares) sintetizado nativamente en tres alternativas: *Clásico (Seno)*, *Madera (Woodblock)* y *Moderno (Cepillo)*.
     *   **Alertas y Notificaciones**: Generación de alarmas sonoras e integración de notificaciones nativas de escritorio (Push) del sistema operativo al concluir los ciclos.
     *   **Flujo Inteligente**: Opciones de inicio automático de descansos o trabajo consecutivo y almacenamiento persistente del contexto de audio para prevenir desconexiones y asegurar un funcionamiento continuo de alta fidelidad.
+*   **Agenda de Reuniones y Seguimiento de Dirigidos (`📅 Agenda / Reuniones`)**:
+    *   **Reuniones Periódicas y Puntuales (`vivo:Meeting`)**: Permite definir tanto encuentros recurrentes (`semanal`, `quincenal`, `mensual` con día de la semana y horario) como reuniones de fecha única.
+    *   **Vinculación con Dirigidos (`rfu:hasParticipant`)**: Selección múltiple de tesistas de grado (`vivo:UndergraduateStudent`), tesistas de posgrado (`vivo:GraduateStudent`) e investigadores (`vivo:FacultyMember`) sincronizada directamente con los nodos y relaciones del lienzo.
+    *   **Bitácora de Sesiones y Asistencia (`rfu:MeetingSession`)**: Historial por cada encuentro con registro de fecha, notas/minutas de avance y control de asistencia por participante (`rfu:attendedBy`), además de enlaces directos a videollamadas (Meet/Zoom) y documentos compartidos.
+*   **Panel de Gestión del Catálogo Compartido (`👑 Gestión del Catálogo - Admin`)**:
+    *   Vista administrativa exclusiva para usuarios `SuperAdmin` que agrupa en pestañas las entidades globales del sistema (*Conferencias*, *Revistas*, *Tópicos CSO*, *Investigadores*, *Tesistas de Posgrado*, *Tesistas de Grado*, *Datasets*, *Archivos* y *Proyectos*), permitiendo búsqueda en tiempo real, alta, edición in-situ y eliminación controlada en GraphDB.
+
+---
+
+## 🐳 Despliegue en Producción con Docker y Actualización Gradual
+
+Toda la configuración para contenedorizar la aplicación se encuentra aislada en la carpeta [`docker/`](docker/README.md) para mantener limpia la raíz del proyecto.
+
+### Arquitectura de Producción (`docker/docker-compose.yml`)
+1. **`graphdb` (`ontotext/graphdb:10.7.0`)**: Base de datos RDF con volumen persistente (`direatento_graphdb_data`) para garantizar que tus grafos, reuniones, tesistas y ontologías no se pierdan nunca al actualizar el código.
+2. **`app` (`docker/Dockerfile`)**: Imagen **multi-etapa** que compila el frontend de React/Vite (`frontend/dist`) y lo sirve directamente desde el mismo servidor Express (`server.js`) en el puerto `3000`, incluyendo monitoreo automático en `/api/health`.
+
+### Pasos Rápidos para Producción
+1. **Configurar variables de producción:**
+   ```bash
+   cp docker/.env.production.example docker/.env.production
+   ```
+   Completa en `docker/.env.production` las credenciales de GraphDB y de tu proyecto de **Firebase Authentication** (se recomienda el plan gratuito *Firebase Spark* en la nube, que soporta hasta 50.000 usuarios activos/mes sin costo y con persistencia total).
+2. **Levantar el entorno completo por primera vez:**
+   ```bash
+   cd docker
+   docker compose --env-file .env.production up -d --build
+   ```
+3. **Actualizar gradualmente sin reiniciar la base de datos:**
+   Cada vez que subas mejoras al repositorio Git, ejecuta:
+   ```bash
+   ./docker/deploy.sh
+   ```
+   Este script descarga los últimos cambios (`git pull`), recompila la imagen `app` y reemplaza **únicamente** el contenedor web (`--no-deps app`) sin detener ni reiniciar GraphDB.
+
+👉 Consulta la [**Guía Completa de Dockerización y Rollback en `docker/README.md`**](docker/README.md) para más detalles.
 
 ---
 

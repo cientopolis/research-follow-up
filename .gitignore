@@ -2,6 +2,7 @@
 .env.local
 config.local.json
 .env
+docker/.env.production
 
 # Local GraphDB data and logs (if run inside project)
 /data/

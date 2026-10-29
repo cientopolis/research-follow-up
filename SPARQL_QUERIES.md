@@ -266,3 +266,63 @@ Registra una sesión de intervalo de tiempo de enfoque (`rfu:PomodoroSession`) c
     }
     ```
 
+---
+
+## 5. Agenda de Reuniones y Bitácora de Encuentros (`MeetingsPanel.tsx`)
+
+### 5.1. Consultar Reuniones Puntuales/Periódicas, Participantes e Historial de Sesiones
+Obtiene todas las reuniones (`vivo:Meeting`) del usuario junto con su configuración de recurrencia, dirigidos participantes (`rfu:hasParticipant`) y sesiones registradas (`rfu:hasSession`).
+
+```sparql
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX vivo: <http://vivoweb.org/ontology/core#>
+PREFIX rfu: <http://cientopolis.org/rfu/>
+PREFIX schema: <http://schema.org/>
+PREFIX ex: <http://example.org/resource/>
+
+SELECT ?meeting ?label ?recurrenceType ?frequency ?dayOfWeek ?date ?time ?meetingUrl ?minutesUrl ?location ?posX ?posY ?participant ?session ?sDate ?sNotes ?sAttendee WHERE {
+  ?meeting rdf:type vivo:Meeting .
+  { ?meeting rfu:createdBy <${userUri}> } UNION { ?meeting rfu:inCanvasOf <${userUri}> }
+  ?meeting rdfs:label ?label .
+  OPTIONAL { ?meeting rfu:recurrenceType ?recurrenceType }
+  OPTIONAL { ?meeting rfu:frequency ?frequency }
+  OPTIONAL { ?meeting rfu:dayOfWeek ?dayOfWeek }
+  OPTIONAL { ?meeting ex:startDate ?date }
+  OPTIONAL { ?meeting rfu:meetingTime ?time }
+  OPTIONAL { ?meeting schema:url ?meetingUrl }
+  OPTIONAL { ?meeting rfu:minutesUrl ?minutesUrl }
+  OPTIONAL { ?meeting rfu:location ?location }
+  OPTIONAL { ?meeting ex:posX ?posX }
+  OPTIONAL { ?meeting ex:posY ?posY }
+  OPTIONAL {
+    { ?meeting rfu:hasParticipant ?participant }
+    UNION
+    { ?meeting vivo:hasMember ?participant }
+  }
+  OPTIONAL {
+    ?meeting rfu:hasSession ?session .
+    OPTIONAL { ?session rfu:sessionDate ?sDate }
+    OPTIONAL { ?session rfu:sessionNotes ?sNotes }
+    OPTIONAL { ?session rfu:attendedBy ?sAttendee }
+  }
+}
+```
+
+### 5.2. Registrar Encuentro y Asistencia en la Bitácora (`rfu:MeetingSession`)
+Almacena un encuentro realizado para una reunión periódica o puntual, vinculando los asistentes presentes (`rfu:attendedBy`).
+
+```sparql
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rfu: <http://cientopolis.org/rfu/>
+
+INSERT DATA {
+  <${meetingUri}> rfu:hasSession <${sessionUri}> .
+  <${sessionUri}> rdf:type rfu:MeetingSession ;
+                  rfu:sessionDate "${date}" ;
+                  rfu:sessionNotes "${notes}" ;
+                  rfu:attendedBy <${participantUri}> .
+}
+```
+
+

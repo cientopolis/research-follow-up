@@ -116,6 +116,11 @@ const getGraphDBHeaders = (contentType = 'application/json') => {
   return headers;
 };
 
+// Healthcheck endpoint para Docker y monitoreo
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Endpoint unificado Proxy SPARQL (Protegido por checkAuth)
 app.post('/api/sparql', checkAuth, async (req, res) => {
   const { query, infer } = req.body;

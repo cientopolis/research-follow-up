@@ -1,0 +1,56 @@
+version: '3.9'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Base de Datos de Grafos RDF (Ontotext GraphDB)
+  # ----------------------------------------------------------------------------
+  graphdb:
+    image: ontotext/graphdb:10.7.0
+    container_name: direatento-graphdb
+    restart: unless-stopped
+    ports:
+      - "7200:7200"
+    environment:
+      - GDB_HEAP_SIZE=2G
+    volumes:
+      - graphdb_data:/opt/graphdb/home
+    networks:
+      - direatento-net
+
+  # ----------------------------------------------------------------------------
+  # 2. Aplicación Web + Proxy SPARQL (Express + React SPA)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID}
+        VITE_FIREBASE_STORAGE_BUCKET: ${VITE_FIREBASE_STORAGE_BUCKET}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
+        VITE_USE_FIREBASE_EMULATOR: ${VITE_USE_FIREBASE_EMULATOR:-false}
+    container_name: direatento-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GRAPHDB_URL=${GRAPHDB_URL:-http://graphdb:7200}
+    depends_on:
+      - graphdb
+    networks:
+      - direatento-net
+
+volumes:
+  graphdb_data:
+    name: direatento_graphdb_data
+
+networks:
+  direatento-net:
+    driver: bridge
