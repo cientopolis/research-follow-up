@@ -462,4 +462,89 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText('International Semantic Web Conference 2026')).toBeInTheDocument();
     });
   });
+
+  it('debe permitir abrir la Agenda de Reuniones, listar reuniones periódicas/puntuales con tesistas y abrir su bitácora', async () => {
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('vivo:Meeting')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  meeting: { value: 'http://example.org/resource/Meeting_TesisAna' },
+                  label: { value: 'Seguimiento Tesis Doctoral Ana' },
+                  recurrenceType: { value: 'periodica' },
+                  frequency: { value: 'semanal' },
+                  dayOfWeek: { value: 'Martes' },
+                  time: { value: '10:00' },
+                  meetingUrl: { value: 'https://meet.google.com/abc-defg-hij' },
+                  minutesUrl: { value: 'https://docs.google.com/document/d/123' },
+                  participant: { value: 'http://example.org/resource/AnaGarcia' },
+                  session: { value: 'http://example.org/resource/Meeting_TesisAna_s1' },
+                  sDate: { value: '2026-10-20' },
+                  sNotes: { value: 'Revisión del capítulo 2 de ontologías.' },
+                  sAttendee: { value: 'http://example.org/resource/AnaGarcia' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          results: {
+            bindings: [
+              {
+                node: { value: 'http://example.org/resource/AnaGarcia' },
+                label: { value: 'Ana García' },
+                type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                x: { value: '200' },
+                y: { value: '200' }
+              }
+            ]
+          }
+        })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    const meetingsTabBtn = screen.getByText(/Agenda \/ Reuniones/i);
+    expect(meetingsTabBtn).toBeInTheDocument();
+
+    fireEvent.click(meetingsTabBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agenda de Reuniones y Seguimiento de Dirigidos/i)).toBeInTheDocument();
+      expect(screen.getByText('Seguimiento Tesis Doctoral Ana')).toBeInTheDocument();
+      expect(screen.getByText(/Periódica • semanal/i)).toBeInTheDocument();
+      expect(screen.getByText(/Revisión del capítulo 2 de ontologías/i)).toBeInTheDocument();
+    });
+
+    // Open session log modal
+    const bitacoraBtn = screen.getByText(/Bitácora \/ Asistencia/i);
+    fireEvent.click(bitacoraBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bitácora de Encuentros: Seguimiento Tesis Doctoral Ana/i)).toBeInTheDocument();
+      expect(screen.getByText(/Registrar Nuevo Encuentro/i)).toBeInTheDocument();
+    });
+  });
 });

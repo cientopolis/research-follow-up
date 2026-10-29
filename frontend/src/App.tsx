@@ -10,6 +10,7 @@ import { AvatarPicker } from './components/AvatarPicker';
 import { MindmapCanvas } from './components/MindmapCanvas';
 import { AdminUsersModal } from './components/AdminUsersModal';
 import { AdminCatalogPanel } from './components/AdminCatalogPanel';
+import { MeetingsPanel } from './components/MeetingsPanel';
 
 interface RDFNode {
   uri: string;
@@ -87,8 +88,14 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
     { uri: 'http://schema.org/url', label: 'URL Archivo Externo (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' }
   ],
   'Meeting': [
-    { uri: 'http://schema.org/url', label: 'URL Minutas / Reunión (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
+    { uri: 'http://schema.org/url', label: 'URL Videollamada (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
+    { uri: 'http://cientopolis.org/rfu/minutesUrl', label: 'URL Minutas / Notas (rfu:minutesUrl)' },
+    { uri: 'http://cientopolis.org/rfu/recurrenceType', label: 'Modalidad (periodica / puntual)' },
+    { uri: 'http://cientopolis.org/rfu/frequency', label: 'Frecuencia (semanal / quincenal / mensual)' },
+    { uri: 'http://cientopolis.org/rfu/dayOfWeek', label: 'Día de la Semana (rfu:dayOfWeek)' },
+    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
+    { uri: 'http://cientopolis.org/rfu/meetingTime', label: 'Horario (HH:MM)' },
+    { uri: 'http://cientopolis.org/rfu/location', label: 'Ubicación / Aula (rfu:location)' }
   ],
   'Conference': [
     { uri: 'http://schema.org/url', label: 'URL Sitio de Conferencia (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
@@ -259,8 +266,8 @@ SELECT ?s ?p ?o WHERE {
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [editingCatalogNode, setEditingCatalogNode] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } | null>(null);
 
-  // View switcher state: 'canvas' vs 'admin-catalog'
-  const [currentView, setCurrentView] = useState<'canvas' | 'admin-catalog'>('canvas');
+  // View switcher state: 'canvas' vs 'meetings' vs 'admin-catalog'
+  const [currentView, setCurrentView] = useState<'canvas' | 'meetings' | 'admin-catalog'>('canvas');
 
   // SuperAdmin User Management Modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -1632,6 +1639,23 @@ SELECT ?s ?p ?o WHERE {
             >
               🎨 Lienzo de Investigación
             </button>
+            <button
+              onClick={() => setCurrentView('meetings')}
+              style={{
+                background: currentView === 'meetings' ? 'var(--bg-surface)' : 'transparent',
+                color: currentView === 'meetings' ? 'var(--text-main)' : 'var(--text-muted)',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: currentView === 'meetings' ? 600 : 400,
+                cursor: 'pointer',
+                boxShadow: currentView === 'meetings' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s'
+              }}
+            >
+              📅 Agenda / Reuniones
+            </button>
             {isSuperAdmin && (
               <button
                 onClick={() => setCurrentView('admin-catalog')}
@@ -1838,7 +1862,7 @@ SELECT ?s ?p ?o WHERE {
         </div>
       </div>
 
-      {/* Main Content Area (Canvas / Admin Catalog Panel & Sidebars) */}
+      {/* Main Content Area (Canvas / Meetings / Admin Catalog Panel & Sidebars) */}
       <div style={{ display: 'flex', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
       {/* Admin Shared Catalog Management View */}
@@ -1849,6 +1873,13 @@ SELECT ?s ?p ?o WHERE {
           fetchCSOTopics={fetchCSOTopics}
           csoTopicsList={csoTopicsList}
           isFetchingCSO={isFetchingCSO}
+        />
+      ) : currentView === 'meetings' ? (
+        <MeetingsPanel
+          userUid={user.uid}
+          fetchWithAuth={fetchWithAuth}
+          canvasNodes={nodes.map(n => ({ uri: n.uri, label: n.label, type: n.type }))}
+          onRefreshCanvas={fetchGraphData}
         />
       ) : (
         <>
@@ -2689,6 +2720,7 @@ SELECT ?s ?p ?o WHERE {
                         <option value="http://purl.org/dc/terms/isPartOf">dct:isPartOf — Es parte de</option>
                       </optgroup>
                       <optgroup label="RFU (proyecto)">
+                        <option value="http://cientopolis.org/rfu/hasParticipant">rfu:hasParticipant — Participa en reunión</option>
                         <option value="http://cientopolis.org/rfu/collaboratesWith">rfu:collaboratesWith — Colabora con</option>
                         <option value="http://cientopolis.org/rfu/supervises">rfu:supervises — Supervisa</option>
                         <option value="http://cientopolis.org/rfu/partOf">rfu:partOf — Parte de</option>
