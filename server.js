@@ -268,10 +268,15 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`==================================================`);
-  console.log(` Servidor backend escuchando en puerto ${PORT}`);
-  console.log(` Conectado a GraphDB en: ${GRAPHDB_URL}`);
-  console.log(` Repositorio activo: ${REPO}`);
-  console.log(`==================================================`);
-});
+// En entorno local o contenedor tradicional (no Serverless Vercel), iniciar listener HTTP
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`==================================================`);
+    console.log(` Servidor backend escuchando en puerto ${PORT}`);
+    console.log(` Conectado a GraphDB en: ${GRAPHDB_URL}`);
+    console.log(` Repositorio activo: ${REPO}`);
+    console.log(`==================================================`);
+  });
+}
+
+export default app;
