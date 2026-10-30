@@ -22,19 +22,24 @@ def parse_env_file(filepath):
 def main():
     print("=== Inicializando conexión y carga en GraphDB ===")
     
-    # Cargar variables de entorno locales
-    env_path = os.path.join(os.path.dirname(__file__), '.env.local')
-    if not os.path.exists(env_path):
-        print(f"Error: No se encontró el archivo {env_path}")
-        print("Por favor crea el archivo .env.local basándote en .env.example")
-        sys.exit(1)
-        
-    config = parse_env_file(env_path)
+    # Cargar variables desde .env.local o docker/.env.production si existen, o desde variables de entorno del sistema
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    env_local_path = os.path.join(base_dir, '.env.local')
+    env_prod_path = os.path.join(base_dir, 'docker', '.env.production')
     
-    url = config.get('GRAPHDB_URL', 'http://localhost:7200')
-    repo = config.get('GRAPHDB_REPOSITORY', 'researcherDB')
-    user = config.get('GRAPHDB_USER')
-    password = config.get('GRAPHDB_PASSWORD')
+    config = {}
+    if os.path.exists(env_prod_path):
+        config.update(parse_env_file(env_prod_path))
+    if os.path.exists(env_local_path):
+        config.update(parse_env_file(env_local_path))
+    
+    url = os.environ.get('GRAPHDB_URL') or config.get('GRAPHDB_URL') or 'http://localhost:7200'
+    # Si en docker/.env.production figura http://graphdb:7200 y el script se corre desde el host Linux, usar localhost:7200
+    if '://graphdb:' in url and not os.path.exists('/.dockerenv'):
+        url = url.replace('://graphdb:', '://localhost:')
+    repo = os.environ.get('GRAPHDB_REPOSITORY') or config.get('GRAPHDB_REPOSITORY') or 'researcherDB'
+    user = os.environ.get('GRAPHDB_USER') if 'GRAPHDB_USER' in os.environ else config.get('GRAPHDB_USER')
+    password = os.environ.get('GRAPHDB_PASSWORD') if 'GRAPHDB_PASSWORD' in os.environ else config.get('GRAPHDB_PASSWORD')
     
     # Archivos a importar y sus Content-Types
     ontologies = [
