@@ -159,11 +159,15 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         const escName = (m.name || '').replace(/"/g, '\\"');
 
         deleteBlocks.push(`
+          DELETE WHERE { <${targetUri}> rdf:type vivo:FacultyMember . };
+          DELETE WHERE { <${targetUri}> rdf:type vivo:GraduateStudent . };
+          DELETE WHERE { <${targetUri}> rdf:type vivo:UndergraduateStudent . };
           DELETE WHERE { <${targetUri}> rdfs:label ?l . };
           DELETE WHERE { <${targetUri}> schema:image ?img . };
           DELETE WHERE { <${targetUri}> schema:url ?u . };
           DELETE WHERE { <${targetUri}> vivo:email ?em . };
           DELETE WHERE { <${targetUri}> ex:status ?st . };
+          DELETE WHERE { <${targetUri}> dcterms:subject ?sub . };
         `);
 
         insertTriples.push(`<${targetUri}> rdf:type <${targetType}> .`);
@@ -192,6 +196,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         PREFIX vivo: <http://vivoweb.org/ontology/core#>
         PREFIX schema: <http://schema.org/>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
         PREFIX ex: <http://example.org/resource/>
         ${deleteBlocks.join('\n')}
       `;
@@ -248,10 +253,9 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
       PREFIX vivo: <http://vivoweb.org/ontology/core#>
 
-      SELECT DISTINCT ?node ?label ?type ?rank ?deadlineMonth ?subject ?externalUrl ?photoUrl ?email WHERE {
+      SELECT DISTINCT ?node ?label ?rank ?deadlineMonth ?subject ?externalUrl ?photoUrl ?email WHERE {
         ?node rdf:type <${typeUri}> .
         ?node rdfs:label ?label .
-        OPTIONAL { ?node rdf:type ?type . FILTER(?type != <http://www.w3.org/2000/01/rdf-schema#Resource>) }
         OPTIONAL { ?node bibo:rank ?rank }
         OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
         OPTIONAL { ?node dcterms:subject ?subject }
@@ -262,7 +266,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         OPTIONAL { ?node vivo:email ?email }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
         BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
-      } LIMIT 200
+      } LIMIT 1000
     `;
 
     try {
@@ -277,7 +281,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         data.results.bindings.forEach((b: any) => {
           const uri = b.node.value;
           const label = b.label.value;
-          const type = b.type ? b.type.value : typeUri;
+          const type = typeUri;
           const rank = b.rank ? b.rank.value : undefined;
           const deadlineMonth = b.deadlineMonth ? b.deadlineMonth.value : undefined;
           const subject = b.subject ? b.subject.value : undefined;
@@ -290,13 +294,18 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
           } else {
             if (rank) itemMap[uri].rank = rank;
             if (deadlineMonth) itemMap[uri].deadlineMonth = deadlineMonth;
-            if (subject) itemMap[uri].subject = subject;
+            if (subject) {
+              const currentSubjects = itemMap[uri].subject ? itemMap[uri].subject!.split(',').map(s => s.trim()) : [];
+              if (!currentSubjects.includes(subject)) {
+                itemMap[uri].subject = [...currentSubjects, subject].join(', ');
+              }
+            }
             if (externalUrl) itemMap[uri].externalUrl = externalUrl;
             if (photoUrl) itemMap[uri].photoUrl = photoUrl;
             if (email) itemMap[uri].email = email;
           }
         });
-        setItems(Object.values(itemMap));
+        setItems(Object.values(itemMap).sort((a, b) => a.label.localeCompare(b.label, 'es')));
       }
     } catch (e) {
       console.error('Error al cargar elementos del catálogo admin', e);
