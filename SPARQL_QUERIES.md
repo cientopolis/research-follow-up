@@ -19,6 +19,10 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
   - [3.2 Crear una tarea en GraphDB](#32-crear-una-tarea-en-graphdb)
   - [3.3 Finalizar/Completar una tarea](#33-finalizarcompletar-una-tarea)
   - [3.4 Registrar realización de Pomodoro](#34-registrar-realización-de-pomodoro)
+- [4. Catálogo Compartido y Sincronización desde Memorias@LIFIA](#4-catálogo-compartido-y-sincronización-desde-memoriaslifia)
+  - [4.1 Consultar entidades del catálogo por categoría](#41-consultar-entidades-del-catálogo-por-categoría)
+  - [4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA](#42-importación--sincronización-masiva-de-personas-desde-memoriaslifia)
+- [5. Agenda de Reuniones y Bitácora de Encuentros (`MeetingsPanel.tsx`)](#5-agenda-de-reuniones-y-bitácora-de-encuentros-meetingspaneltsx)
 
 ---
 
@@ -33,13 +37,21 @@ Obtiene todos los recursos del grafo que se originan bajo `http://example.org/` 
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
     PREFIX ex: <http://example.org/resource/>
 
-    SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType WHERE {
+    SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl ?photoUrl WHERE {
       ?node rdf:type ?type .
+      { ?node rfu:createdBy <${userUri}> } UNION { ?node rfu:inCanvasOf <${userUri}> }
       ?node rdfs:label ?label .
       OPTIONAL { ?node ex:posX ?x }
       OPTIONAL { ?node ex:posY ?y }
       OPTIONAL { ?node ex:status ?status }
       OPTIONAL { ?node ex:thesisType ?thesisType }
+      OPTIONAL { ?node rfu:hasMindmap ?mindmapContent }
+      OPTIONAL { ?node schema:url ?url1 }
+      OPTIONAL { ?node foaf:page ?url2 }
+      OPTIONAL { ?node schema:image ?img1 }
+      OPTIONAL { ?node foaf:depiction ?img2 }
+      BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+      BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
       FILTER(STRSTARTS(STR(?node), "http://example.org/"))
     }
     ```
@@ -263,6 +275,73 @@ Registra una sesión de intervalo de tiempo de enfoque (`rfu:PomodoroSession`) c
         ?existingPomodoro rfu:startTime "${startIso}"^^xsd:dateTime ;
                           rfu:endTime "${endIso}"^^xsd:dateTime .
       }
+    }
+    ```
+
+---
+
+## 4. Catálogo Compartido y Sincronización desde Memorias@LIFIA
+
+### 4.1 Consultar entidades del catálogo por categoría
+Obtiene todos los recursos globales de una categoría (`vivo:FacultyMember`, `vivo:GraduateStudent`, `vivo:UndergraduateStudent`, `bibo:Conference`, `bibo:Journal`, etc.) incluyendo foto (`schema:image`), correo (`vivo:email`), enlace oficial (`schema:url`) y tópicos (`dcterms:subject`), sin explosión cartesiana de `rdf:type`.
+*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L240)
+*   **Query**:
+    ```sparql
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX bibo: <http://purl.org/ontology/bibo/>
+    PREFIX dcterms: <http://purl.org/dc/terms/>
+    PREFIX schema: <http://schema.org/>
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    PREFIX vivo: <http://vivoweb.org/ontology/core#>
+
+    SELECT DISTINCT ?node ?label ?rank ?deadlineMonth ?subject ?externalUrl ?photoUrl ?email WHERE {
+      ?node rdf:type <${typeUri}> .
+      ?node rdfs:label ?label .
+      OPTIONAL { ?node bibo:rank ?rank }
+      OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
+      OPTIONAL { ?node dcterms:subject ?subject }
+      OPTIONAL { ?node schema:url ?url1 }
+      OPTIONAL { ?node foaf:page ?url2 }
+      OPTIONAL { ?node schema:image ?img1 }
+      OPTIONAL { ?node foaf:depiction ?img2 }
+      OPTIONAL { ?node vivo:email ?email }
+      BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+      BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
+    } LIMIT 1000
+    ```
+
+### 4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA
+Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://memorias.lifia.info.unlp.edu.ar/members`, almacenando únicamente URLs externas (`schema:image`, `schema:url`).
+*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L144)
+*   **Queries**:
+    ```sparql
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX vivo: <http://vivoweb.org/ontology/core#>
+    PREFIX schema: <http://schema.org/>
+    PREFIX dcterms: <http://purl.org/dc/terms/>
+    PREFIX ex: <http://example.org/resource/>
+
+    DELETE WHERE { <${targetUri}> rdf:type vivo:FacultyMember . };
+    DELETE WHERE { <${targetUri}> rdf:type vivo:GraduateStudent . };
+    DELETE WHERE { <${targetUri}> rdf:type vivo:UndergraduateStudent . };
+    DELETE WHERE { <${targetUri}> rdfs:label ?l . };
+    DELETE WHERE { <${targetUri}> schema:image ?img . };
+    DELETE WHERE { <${targetUri}> schema:url ?u . };
+    DELETE WHERE { <${targetUri}> vivo:email ?em . };
+    DELETE WHERE { <${targetUri}> ex:status ?st . };
+    DELETE WHERE { <${targetUri}> dcterms:subject ?sub . };
+    ```
+    ```sparql
+    INSERT DATA {
+      <${targetUri}> rdf:type <${targetType}> ;
+                     rdfs:label "${name}" ;
+                     schema:image "${photoUrl}" ;
+                     schema:url <${profileUrl}> ;
+                     vivo:email "${email}" ;
+                     ex:status "${position}" ;
+                     dcterms:subject "${tag}" .
     }
     ```
 
