@@ -119,11 +119,16 @@ export function NodeAvatar({ nodeType, seed, photoUrl, iconName, iconBgColor, si
     border: photoUrl ? `2px solid ${chipColor}` : 'none',
   };
 
-  // 1. User-uploaded photo — highest priority
+  // 1. User-selected photo URL — highest priority
   if (photoUrl) {
     return (
       <div style={containerStyle}>
-        <img src={photoUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img
+          src={photoUrl}
+          alt="Avatar"
+          referrerPolicy="no-referrer"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
       </div>
     );
   }

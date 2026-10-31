@@ -4,6 +4,7 @@ export interface PersonOption {
   uri: string;
   label: string;
   type: string;
+  photoUrl?: string;
 }
 
 export interface MeetingSession {
@@ -728,7 +729,17 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
                               gap: '5px'
                             }}
                           >
-                            👤 {getPersonLabel(pUri)}
+                            {nodeObj?.photoUrl ? (
+                              <img
+                                src={nodeObj.photoUrl}
+                                alt={getPersonLabel(pUri)}
+                                referrerPolicy="no-referrer"
+                                style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              '👤'
+                            )}{' '}
+                            {getPersonLabel(pUri)}
                             <small style={{ opacity: 0.8, fontWeight: 400 }}>({badge.text})</small>
                           </span>
                         );

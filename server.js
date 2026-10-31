@@ -121,6 +121,102 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Cache en memoria para perfiles de Memorias@LIFIA (evita peticiones repetidas)
+let lifiaMembersCache = {
+  data: null,
+  fetchedAt: 0
+};
+const LIFIA_CACHE_TTL_MS = 1000 * 60 * 60; // 1 hora
+
+// Endpoint para obtener miembros y fotos desde memorias.lifia.info.unlp.edu.ar/members
+app.get('/api/lifia-members', checkAuth, async (req, res) => {
+  try {
+    const now = Date.now();
+    if (lifiaMembersCache.data && (now - lifiaMembersCache.fetchedAt) < LIFIA_CACHE_TTL_MS) {
+      return res.json({ members: lifiaMembersCache.data, cached: true });
+    }
+
+    // Consultamos memorias.lifia.info.unlp.edu.ar/members (y su redirección oficial memorias.lifia.ar/members)
+    const targetUrls = [
+      'https://memorias.lifia.ar/members?limit=200&page=1',
+      'https://memorias.lifia.info.unlp.edu.ar/members?limit=200&page=1'
+    ];
+
+    let html = '';
+    for (const url of targetUrls) {
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'ResearchFollowUp/1.0 (+https://lifia.info.unlp.edu.ar)' }
+        });
+        if (response.ok) {
+          const text = await response.text();
+          if (text.includes('/members/')) {
+            html = text;
+            break;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn(`[LIFIA Members] Intento fallido en ${url}:`, fetchErr.message);
+      }
+    }
+
+    if (!html) {
+      return res.status(502).json({ error: 'No se pudo obtener el listado de miembros desde Memorias@LIFIA.' });
+    }
+
+    const membersMap = new Map();
+    const cardRegex = /<a[^>]+href="(\/members\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match;
+
+    while ((match = cardRegex.exec(html)) !== null) {
+      const relativeUrl = match[1];
+      const cardHtml = match[2];
+
+      const imgMatch = cardHtml.match(/<img[^>]+alt="([^"]*)"[^>]+src="([^"]+)"/i) ||
+                       cardHtml.match(/<img[^>]+src="([^"]+)"[^>]+alt="([^"]*)"/i);
+      const h3Match = cardHtml.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+
+      let rawName = '';
+      let photoUrl = '';
+
+      if (imgMatch) {
+        if (cardHtml.indexOf('alt=') < cardHtml.indexOf('src=')) {
+          rawName = imgMatch[1];
+          photoUrl = imgMatch[2];
+        } else {
+          photoUrl = imgMatch[1];
+          rawName = imgMatch[2];
+        }
+      }
+
+      if (h3Match) {
+        const cleanH3 = h3Match[1].replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (cleanH3) rawName = cleanH3;
+      } else if (rawName) {
+        rawName = rawName.replace(/\s+/g, ' ').trim();
+      }
+
+      if (rawName && photoUrl) {
+        const slug = relativeUrl.replace('/members/', '');
+        membersMap.set(slug, {
+          slug,
+          name: rawName,
+          photoUrl,
+          profileUrl: `https://memorias.lifia.info.unlp.edu.ar${relativeUrl}`
+        });
+      }
+    }
+
+    const members = Array.from(membersMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    lifiaMembersCache = { data: members, fetchedAt: now };
+
+    return res.json({ members, cached: false });
+  } catch (error) {
+    console.error('[LIFIA Members API] Error:', error);
+    return res.status(500).json({ error: 'Error al consultar miembros de Memorias@LIFIA', details: error.message });
+  }
+});
+
 // Endpoint unificado Proxy SPARQL (Protegido por checkAuth)
 app.post('/api/sparql', checkAuth, async (req, res) => {
   const { query, infer } = req.body;

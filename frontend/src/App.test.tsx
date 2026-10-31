@@ -547,4 +547,103 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText(/Registrar Nuevo Encuentro/i)).toBeInTheDocument();
     });
   });
+
+  it('debe permitir asociar la foto de una persona mediante URL web, Cuenta Google o directorio Memorias@LIFIA sin guardar archivos binarios', async () => {
+    let savedInsertQuery = '';
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      if (typeof url === 'string' && url.includes('/api/lifia-members')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            members: [
+              {
+                slug: 'diego-torres',
+                name: 'Diego Torres',
+                photoUrl: 'https://magictowers.github.io/assets/img/foto_diego-800.webp',
+                profileUrl: 'https://memorias.lifia.info.unlp.edu.ar/members/diego-torres'
+              }
+            ]
+          })
+        });
+      }
+
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('INSERT') && query.includes('schema.org/image')) {
+        savedInsertQuery = query;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://example.org/resource/DiegoTorres' },
+                  label: { value: 'Diego Torres' },
+                  type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
+                  x: { value: '200' },
+                  y: { value: '200' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+    });
+
+    // Abrir el Inspector del nodo persona
+    const inspectBtn = screen.getByTitle('Ver detalles / Configurar nodo');
+    fireEvent.click(inspectBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Inspector Semántico/i)).toBeInTheDocument();
+      expect(screen.getByText(/🌐 URL Web/i)).toBeInTheDocument();
+      expect(screen.getByText(/🔵 Cuenta Google/i)).toBeInTheDocument();
+      expect(screen.getByText(/🏛️ Memorias@LIFIA/i)).toBeInTheDocument();
+    });
+
+    // Seleccionar Memorias@LIFIA
+    fireEvent.click(screen.getByText(/🏛️ Memorias@LIFIA/i));
+
+    await waitFor(() => {
+      expect(screen.getByText('Usar foto')).toBeInTheDocument();
+    });
+
+    // Elegir la foto de Diego Torres desde Memorias@LIFIA
+    fireEvent.click(screen.getByText('Usar foto'));
+
+    // Guardar cambios en GraphDB
+    const saveBtn = screen.getByText('Guardar Cambios');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(savedInsertQuery).toContain('<http://schema.org/image>');
+      expect(savedInsertQuery).toContain('https://magictowers.github.io/assets/img/foto_diego-800.webp');
+    });
+  });
 });

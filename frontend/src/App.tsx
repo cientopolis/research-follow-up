@@ -35,15 +35,18 @@ interface RDFConnection {
 const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string; validation?: (val: string) => string | null }[] } = {
   'FacultyMember': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
     { uri: 'http://example.org/resource/status', label: 'Estado' }
   ],
   'GraduateStudent': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
     { uri: 'http://example.org/resource/status', label: 'Estado' },
     { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis' }
   ],
   'UndergraduateStudent': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
+    { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
     { uri: 'http://example.org/resource/status', label: 'Estado' },
     { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis de Grado' }
   ],
@@ -177,7 +180,7 @@ export default function App() {
   const [newPropVal, setNewPropVal] = useState('');
   const [isAddingCustomProp, setIsAddingCustomProp] = useState(false);
 
-  // Node photos — stored as data URLs keyed by node URI
+  // Node photos — stored as external URLs keyed by node URI
   const [nodePhotos, setNodePhotos] = useState<{ [uri: string]: string }>({});
   // Node custom icons — Phosphor icon name keyed by node URI (null = use automatic avatar)
   const [nodeIcons, setNodeIcons] = useState<{ [uri: string]: string | null }>({});
@@ -185,6 +188,31 @@ export default function App() {
   const [nodeIconBgs, setNodeIconBgs] = useState<{ [uri: string]: string | null }>({});
   // Tab state for the avatar editor in the inspector
   const [avatarTab, setAvatarTab] = useState<'photo' | 'icon'>('photo');
+  // Photo source sub-tab for people nodes: 'url' | 'google' | 'lifia'
+  const [photoSourceMode, setPhotoSourceMode] = useState<'url' | 'google' | 'lifia'>('url');
+  // Memorias@LIFIA members directory state
+  const [lifiaMembers, setLifiaMembers] = useState<{ slug: string; name: string; photoUrl: string; profileUrl: string }[]>([]);
+  const [lifiaSearchQuery, setLifiaSearchQuery] = useState('');
+  const [isLoadingLifiaMembers, setIsLoadingLifiaMembers] = useState(false);
+  const [lifiaError, setLifiaError] = useState<string | null>(null);
+
+  const fetchLifiaMembers = useCallback(async () => {
+    if (lifiaMembers.length > 0 || isLoadingLifiaMembers) return;
+    setIsLoadingLifiaMembers(true);
+    setLifiaError(null);
+    try {
+      const res = await fetchWithAuth('/api/lifia-members');
+      if (!res.ok) throw new Error('No se pudo conectar con Memorias@LIFIA');
+      const data = await res.json();
+      if (data.members && Array.isArray(data.members)) {
+        setLifiaMembers(data.members);
+      }
+    } catch (err: any) {
+      setLifiaError(err.message || 'Error al consultar memorias.lifia.info.unlp.edu.ar/members');
+    } finally {
+      setIsLoadingLifiaMembers(false);
+    }
+  }, [fetchWithAuth, lifiaMembers.length, isLoadingLifiaMembers]);
 
   const handlePhotoUpload = useCallback((nodeUri: string, file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -227,6 +255,7 @@ export default function App() {
     type: 'http://purl.org/ontology/bibo/Conference',
     uriSuffix: '',
     externalUrl: '',
+    photoUrl: '',
     rank: 'CORE A*',
     deadlineMonth: 'Marzo',
     subject: ''
@@ -431,7 +460,7 @@ SELECT ?s ?p ?o WHERE {
       PREFIX schema: <http://schema.org/>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl WHERE {
+      SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl ?photoUrl WHERE {
         ?node rdf:type ?type .
         { ?node rfu:createdBy <${userUri}> } UNION { ?node rfu:inCanvasOf <${userUri}> }
         ?node rdfs:label ?label .
@@ -446,7 +475,14 @@ SELECT ?s ?p ?o WHERE {
         OPTIONAL {
           ?node foaf:page ?url2 .
         }
+        OPTIONAL {
+          ?node schema:image ?img1 .
+        }
+        OPTIONAL {
+          ?node foaf:depiction ?img2 .
+        }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+        BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
         FILTER(STRSTARTS(STR(?node), "http://example.org/"))
       }
     `;
@@ -461,10 +497,14 @@ SELECT ?s ?p ?o WHERE {
       
       if (data.results && data.results.bindings) {
         const nodeMap: { [uri: string]: RDFNode } = {};
+        const loadedPhotos: { [uri: string]: string } = {};
         
         data.results.bindings.forEach((b: any) => {
           const uri = b.node.value;
           const type = b.type.value;
+          if (b.photoUrl && b.photoUrl.value) {
+            loadedPhotos[uri] = b.photoUrl.value;
+          }
           
           // Si ya existe la URI, preferimos tipos de la ontología VIVO, o más específicos en su defecto
           if (nodeMap[uri]) {
@@ -484,6 +524,7 @@ SELECT ?s ?p ?o WHERE {
             }
             if (b.mindmapContent) nodeMap[uri].mindmapContent = b.mindmapContent.value;
             if (b.externalUrl) nodeMap[uri].externalUrl = b.externalUrl.value;
+            if (b.photoUrl) nodeMap[uri].photoUrl = b.photoUrl.value;
             return;
           }
           
@@ -495,6 +536,7 @@ SELECT ?s ?p ?o WHERE {
             y: b.y ? parseFloat(b.y.value) : Math.random() * 300 + 100,
             status: b.status ? b.status.value : undefined,
             thesisType: b.thesisType ? b.thesisType.value : undefined,
+            photoUrl: b.photoUrl ? b.photoUrl.value : undefined,
             mindmapContent: b.mindmapContent ? b.mindmapContent.value : undefined,
             externalUrl: b.externalUrl ? b.externalUrl.value : undefined
           };
@@ -502,6 +544,7 @@ SELECT ?s ?p ?o WHERE {
 
         const loadedNodes = Object.values(nodeMap);
         setNodes(loadedNodes);
+        setNodePhotos(prev => ({ ...prev, ...loadedPhotos }));
         
         // Fetch connections
         await fetchConnections();
@@ -618,6 +661,10 @@ SELECT ?s ?p ?o WHERE {
       return;
     }
 
+    const photoTriple = user.photoURL
+      ? `<${nodeUri}> <http://schema.org/image> "${user.photoURL.replace(/"/g, '\\"')}" .`
+      : '';
+
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -630,6 +677,7 @@ SELECT ?s ?p ?o WHERE {
                      rfu:createdBy <${userUri}> ;
                      ex:posX "150" ;
                      ex:posY "150" .
+        ${photoTriple}
         <${userUri}> rfu:associatedResearcher <${nodeUri}> .
       }
     `;
@@ -738,7 +786,7 @@ SELECT ?s ?p ?o WHERE {
     const query = `
       SELECT ?predicate ?value WHERE {
         <${nodeURI}> ?predicate ?value .
-        FILTER(isLiteral(?value))
+        FILTER(isLiteral(?value) || ?predicate IN (<http://schema.org/url>, <http://xmlns.com/foaf/0.1/page>, <http://schema.org/image>, <http://xmlns.com/foaf/0.1/depiction>))
       }
     `;
     try {
@@ -757,6 +805,12 @@ SELECT ?s ?p ?o WHERE {
         if (!props['http://www.w3.org/2000/01/rdf-schema#label']) {
           const matched = nodes.find(n => n.uri === nodeURI);
           props['http://www.w3.org/2000/01/rdf-schema#label'] = matched ? matched.label : '';
+        }
+        // Si hay schema:image o foaf:depiction, sincronizar con nodePhotos
+        const photoVal = props['http://schema.org/image'] || props['http://xmlns.com/foaf/0.1/depiction'];
+        if (photoVal) {
+          props['http://schema.org/image'] = photoVal;
+          setNodePhotos(prev => ({ ...prev, [nodeURI]: photoVal }));
         }
         setNodeDetails(props);
       }
@@ -886,10 +940,17 @@ SELECT ?s ?p ?o WHERE {
       });
       const data = await res.json();
       if (data.success) {
-        // Update local state label
+        // Update local state label and photoUrl
         const newLabel = nodeDetails['http://www.w3.org/2000/01/rdf-schema#label'] || selectedNode.label;
         const newStatus = nodeDetails['http://example.org/resource/status'] || selectedNode.status;
-        setNodes(nodes.map(n => n.uri === selectedNode.uri ? { ...n, label: newLabel, status: newStatus } : n));
+        const newPhotoUrl = (nodeDetails['http://schema.org/image'] || '').trim() || undefined;
+        setNodes(nodes.map(n => n.uri === selectedNode.uri ? { ...n, label: newLabel, status: newStatus, photoUrl: newPhotoUrl } : n));
+        setNodePhotos(prev => {
+          const next = { ...prev };
+          if (newPhotoUrl) next[selectedNode.uri] = newPhotoUrl;
+          else delete next[selectedNode.uri];
+          return next;
+        });
         
         setIsInspectorOpen(false);
         setSelectedNode(null);
@@ -1229,6 +1290,10 @@ SELECT ?s ?p ?o WHERE {
       extraTriples += `\n<${uri}> <http://schema.org/url> <${newNodeData.externalUrl.trim()}> .`;
     }
 
+    if (newNodeData.photoUrl && newNodeData.photoUrl.trim()) {
+      extraTriples += `\n<${uri}> <http://schema.org/image> "${newNodeData.photoUrl.trim().replace(/"/g, '\\"')}" .`;
+    }
+
     if (newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') {
       if (newNodeData.rank && newNodeData.rank.trim()) {
         extraTriples += `\n<${uri}> <http://purl.org/ontology/bibo/rank> "${newNodeData.rank.trim()}" .`;
@@ -1267,7 +1332,7 @@ SELECT ?s ?p ?o WHERE {
       const data = await res.json();
       if (data.success) {
         setShowNewNodeModal(false);
-        setNewNodeData({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '', externalUrl: '' });
+        setNewNodeData({ label: '', type: 'http://vivoweb.org/ontology/core#GraduateStudent', uriSuffix: '', externalUrl: '', photoUrl: '', rank: 'CORE A*', deadlineMonth: 'Marzo', subject: '' });
         await fetchGraphData();
         // If this was a quick-connect action, open relation picker
         if (quickConnectSourceUri) {
@@ -2412,52 +2477,228 @@ SELECT ?s ?p ?o WHERE {
 
                           {/* Tab: Photo */}
                           {avatarTab === 'photo' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label
-                                id="photoUploadLabel"
-                                htmlFor="photoUploadInput"
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                  cursor: 'pointer', padding: '7px 14px',
-                                  background: 'var(--bg-surface)', border: '1px dashed var(--border-color)',
-                                  borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-main)',
-                                  transition: 'background 0.15s',
-                                  alignSelf: 'flex-start',
-                                }}
-                              >
-                                📁 Elegir foto…
-                              </label>
-                              <input
-                                id="photoUploadInput"
-                                type="file"
-                                accept="image/*"
-                                style={{ display: 'none' }}
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handlePhotoUpload(selectedNode.uri, file);
-                                    // Photo takes priority — clear any custom icon
-                                    setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: null }));
-                                  }
-                                  e.target.value = '';
-                                }}
-                              />
-                              {nodePhotos[selectedNode.uri] && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {/* Source selector buttons */}
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                 <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => setPhotoSourceMode('url')}
+                                  style={{
+                                    fontSize: '0.74rem',
+                                    padding: '4px 10px',
+                                    background: photoSourceMode === 'url' ? 'var(--color-investigador)' : 'var(--bg-surface)',
+                                    color: photoSourceMode === 'url' ? '#fff' : 'var(--text-main)',
+                                    border: '1px solid var(--border-color)'
+                                  }}
+                                >
+                                  🌐 URL Web
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => setPhotoSourceMode('google')}
+                                  style={{
+                                    fontSize: '0.74rem',
+                                    padding: '4px 10px',
+                                    background: photoSourceMode === 'google' ? 'var(--color-investigador)' : 'var(--bg-surface)',
+                                    color: photoSourceMode === 'google' ? '#fff' : 'var(--text-main)',
+                                    border: '1px solid var(--border-color)'
+                                  }}
+                                >
+                                  🔵 Cuenta Google
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => {
+                                    setPhotoSourceMode('lifia');
+                                    fetchLifiaMembers();
+                                  }}
+                                  style={{
+                                    fontSize: '0.74rem',
+                                    padding: '4px 10px',
+                                    background: photoSourceMode === 'lifia' ? 'var(--color-investigador)' : 'var(--bg-surface)',
+                                    color: photoSourceMode === 'lifia' ? '#fff' : 'var(--text-main)',
+                                    border: '1px solid var(--border-color)'
+                                  }}
+                                >
+                                  🏛️ Memorias@LIFIA
+                                </button>
+                              </div>
+
+                              {/* Opción 1: URL en la Web */}
+                              {photoSourceMode === 'url' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <input
+                                    id="photoUrlInput"
+                                    type="url"
+                                    placeholder="https://ejemplo.org/foto-perfil.jpg"
+                                    value={nodeDetails['http://schema.org/image'] || nodePhotos[selectedNode.uri] || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      handlePropertyChange('http://schema.org/image', val, (v) => !v || /^https?:\/\/.+/i.test(v) ? null : 'Debe comenzar con http:// o https://');
+                                      setNodePhotos(prev => {
+                                        const next = { ...prev };
+                                        if (val.trim()) next[selectedNode.uri] = val.trim();
+                                        else delete next[selectedNode.uri];
+                                        return next;
+                                      });
+                                      if (val.trim()) {
+                                        setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: null }));
+                                      }
+                                    }}
+                                    style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                  />
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                    Pegá la dirección web (URL) de una imagen alojada externamente. No se guardan archivos binarios en la base.
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Opción 2: Foto de perfil de Google */}
+                              {photoSourceMode === 'google' && (
+                                <div style={{
+                                  display: 'flex', flexDirection: 'column', gap: '6px',
+                                  padding: '8px 10px', borderRadius: '8px', background: 'var(--bg-surface)',
+                                  border: '1px solid var(--border-color)'
+                                }}>
+                                  {user?.photoURL ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                      <img
+                                        src={user.photoURL}
+                                        alt="Google Avatar"
+                                        referrerPolicy="no-referrer"
+                                        style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
+                                      />
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                          {user.displayName || user.email}
+                                        </div>
+                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {user.photoURL}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-primary"
+                                        onClick={() => {
+                                          const gUrl = user.photoURL!;
+                                          handlePropertyChange('http://schema.org/image', gUrl);
+                                          setNodePhotos(prev => ({ ...prev, [selectedNode.uri]: gUrl }));
+                                          setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: null }));
+                                        }}
+                                        style={{ fontSize: '0.74rem', padding: '5px 10px' }}
+                                      >
+                                        Usar mi foto Google
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                      Tu sesión actual ({user?.email}) no posee una foto de perfil de Google asociada, o iniciaste sesión con email/contraseña. Podés iniciar sesión con el botón <strong>Continuar con Google</strong> o pegar la URL de Google Photos/Avatar en la pestaña URL Web.
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Opción 3: Perfil en Memorias@LIFIA (memorias.lifia.info.unlp.edu.ar/members) */}
+                              {photoSourceMode === 'lifia' && (
+                                <div style={{
+                                  display: 'flex', flexDirection: 'column', gap: '6px',
+                                  padding: '8px 10px', borderRadius: '8px', background: 'var(--bg-surface)',
+                                  border: '1px solid var(--border-color)'
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                      Directorio memorias.lifia.info.unlp.edu.ar/members
+                                    </span>
+                                    <a
+                                      href="https://memorias.lifia.info.unlp.edu.ar/members"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ fontSize: '0.68rem', color: 'var(--color-investigador)' }}
+                                    >
+                                      Abrir portal ↗
+                                    </a>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Buscar integrante del LIFIA por nombre (ej: Diego Torres, Rossi)..."
+                                    value={lifiaSearchQuery}
+                                    onChange={(e) => setLifiaSearchQuery(e.target.value)}
+                                    style={{ fontSize: '0.78rem', padding: '5px 8px' }}
+                                  />
+                                  {isLoadingLifiaMembers && (
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                      ⏳ Consultando miembros en memorias.lifia.info.unlp.edu.ar/members...
+                                    </span>
+                                  )}
+                                  {lifiaError && (
+                                    <span style={{ fontSize: '0.72rem', color: '#d20f39' }}>
+                                      ⚠️ {lifiaError}
+                                    </span>
+                                  )}
+                                  {!isLoadingLifiaMembers && lifiaMembers.length > 0 && (
+                                    <div style={{
+                                      maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px',
+                                      marginTop: '2px'
+                                    }}>
+                                      {lifiaMembers
+                                        .filter(m => !lifiaSearchQuery.trim() || m.name.toLowerCase().includes(lifiaSearchQuery.toLowerCase().trim()))
+                                        .map(member => (
+                                          <div
+                                            key={member.slug}
+                                            onClick={() => {
+                                              handlePropertyChange('http://schema.org/image', member.photoUrl);
+                                              setNodePhotos(prev => ({ ...prev, [selectedNode.uri]: member.photoUrl }));
+                                              setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: null }));
+                                            }}
+                                            style={{
+                                              display: 'flex', alignItems: 'center', gap: '8px',
+                                              padding: '5px 8px', borderRadius: '6px', cursor: 'pointer',
+                                              background: nodePhotos[selectedNode.uri] === member.photoUrl ? 'rgba(30, 102, 245, 0.12)' : 'var(--bg-mantle)',
+                                              border: nodePhotos[selectedNode.uri] === member.photoUrl ? '1px solid #1e66f5' : '1px solid transparent'
+                                            }}
+                                          >
+                                            <img
+                                              src={member.photoUrl}
+                                              alt={member.name}
+                                              referrerPolicy="no-referrer"
+                                              style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                                            />
+                                            <span style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-main)', flex: 1 }}>
+                                              {member.name}
+                                            </span>
+                                            <span style={{ fontSize: '0.68rem', color: '#1e66f5', fontWeight: 600 }}>
+                                              Usar foto
+                                            </span>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {(nodePhotos[selectedNode.uri] || nodeDetails['http://schema.org/image']) && (
+                                <button
+                                  type="button"
                                   className="btn"
                                   style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#d20f39', alignSelf: 'flex-start' }}
-                                  onClick={() => setNodePhotos(prev => {
-                                    const next = { ...prev };
-                                    delete next[selectedNode.uri];
-                                    return next;
-                                  })}
+                                  onClick={() => {
+                                    handlePropertyChange('http://schema.org/image', '');
+                                    setNodePhotos(prev => {
+                                      const next = { ...prev };
+                                      delete next[selectedNode.uri];
+                                      return next;
+                                    });
+                                  }}
                                 >
                                   ✕ Quitar foto
                                 </button>
                               )}
-                              {!nodePhotos[selectedNode.uri] && (
+                              {!nodePhotos[selectedNode.uri] && !nodeDetails['http://schema.org/image'] && (
                                 <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                  Sin foto. Se usa el avatar o ícono seleccionado.
+                                  Sin foto. Se usa el avatar o ícono seleccionado. Recordá pulsar "Guardar Cambios" para persistir la URL en GraphDB.
                                 </span>
                               )}
                             </div>
@@ -2477,6 +2718,7 @@ SELECT ?s ?p ?o WHERE {
                                     onSelect={(presetSeed) => {
                                       setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: presetSeed }));
                                       if (presetSeed) {
+                                        handlePropertyChange('http://schema.org/image', '');
                                         setNodePhotos(prev => {
                                           const next = { ...prev };
                                           delete next[selectedNode.uri];
@@ -2498,6 +2740,7 @@ SELECT ?s ?p ?o WHERE {
                                     setNodeIcons(prev => ({ ...prev, [selectedNode.uri]: name }));
                                     setNodeIconBgs(prev => ({ ...prev, [selectedNode.uri]: bgColor || null }));
                                     if (name) {
+                                      handlePropertyChange('http://schema.org/image', '');
                                       setNodePhotos(prev => {
                                         const next = { ...prev };
                                         delete next[selectedNode.uri];
@@ -3006,6 +3249,122 @@ SELECT ?s ?p ?o WHERE {
                   <label>Sufijo de URI</label>
                   <input type="text" placeholder="Ej: ISWC2026 o JWS" value={newNodeData.uriSuffix} onChange={(e) => setNewNodeData({ ...newNodeData, uriSuffix: e.target.value.replace(/\s+/g, '') })} />
                 </div>
+
+                {/* Campos específicos de Foto de Perfil para Personas */}
+                {(newNodeData.type === 'http://vivoweb.org/ontology/core#FacultyMember' ||
+                  newNodeData.type === 'http://vivoweb.org/ontology/core#GraduateStudent' ||
+                  newNodeData.type === 'http://vivoweb.org/ontology/core#UndergraduateStudent') && (
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', borderRadius: '10px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>📷 Foto de Perfil (solo URL externa)</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => setPhotoSourceMode('url')}
+                        style={{
+                          fontSize: '0.72rem', padding: '4px 8px',
+                          background: photoSourceMode === 'url' ? 'var(--color-investigador)' : 'var(--bg-mantle)',
+                          color: photoSourceMode === 'url' ? '#fff' : 'var(--text-main)'
+                        }}
+                      >
+                        🌐 URL Web
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => {
+                          setPhotoSourceMode('google');
+                          if (user?.photoURL) {
+                            setNewNodeData(prev => ({ ...prev, photoUrl: user.photoURL! }));
+                          }
+                        }}
+                        style={{
+                          fontSize: '0.72rem', padding: '4px 8px',
+                          background: photoSourceMode === 'google' ? 'var(--color-investigador)' : 'var(--bg-mantle)',
+                          color: photoSourceMode === 'google' ? '#fff' : 'var(--text-main)'
+                        }}
+                      >
+                        🔵 Cuenta Google
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => {
+                          setPhotoSourceMode('lifia');
+                          fetchLifiaMembers();
+                        }}
+                        style={{
+                          fontSize: '0.72rem', padding: '4px 8px',
+                          background: photoSourceMode === 'lifia' ? 'var(--color-investigador)' : 'var(--bg-mantle)',
+                          color: photoSourceMode === 'lifia' ? '#fff' : 'var(--text-main)'
+                        }}
+                      >
+                        🏛️ Memorias@LIFIA
+                      </button>
+                    </div>
+
+                    {photoSourceMode === 'lifia' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <input
+                          type="text"
+                          placeholder="Buscar integrante en memorias.lifia.info.unlp.edu.ar/members..."
+                          value={lifiaSearchQuery}
+                          onChange={(e) => setLifiaSearchQuery(e.target.value)}
+                          style={{ fontSize: '0.76rem', padding: '5px 8px' }}
+                        />
+                        {isLoadingLifiaMembers ? (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>⏳ Cargando miembros de Memorias@LIFIA...</span>
+                        ) : (
+                          <div style={{ maxHeight: '130px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {lifiaMembers
+                              .filter(m => !lifiaSearchQuery.trim() || m.name.toLowerCase().includes(lifiaSearchQuery.toLowerCase().trim()))
+                              .map(m => (
+                                <div
+                                  key={m.slug}
+                                  onClick={() => {
+                                    const autoSuffix = m.slug.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+                                    setNewNodeData(prev => ({
+                                      ...prev,
+                                      label: prev.label || m.name,
+                                      uriSuffix: prev.uriSuffix || autoSuffix,
+                                      photoUrl: m.photoUrl,
+                                      externalUrl: prev.externalUrl || m.profileUrl
+                                    }));
+                                  }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px',
+                                    borderRadius: '6px', cursor: 'pointer', background: 'var(--bg-mantle)'
+                                  }}
+                                >
+                                  <img src={m.photoUrl} alt={m.name} referrerPolicy="no-referrer" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                                  <span style={{ fontSize: '0.76rem', flex: 1 }}>{m.name}</span>
+                                  <span style={{ fontSize: '0.66rem', color: '#1e66f5', fontWeight: 600 }}>Elegir</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {newNodeData.photoUrl && (
+                        <img
+                          src={newNodeData.photoUrl}
+                          alt="Preview"
+                          referrerPolicy="no-referrer"
+                          style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                        />
+                      )}
+                      <input
+                        type="url"
+                        placeholder="https://... (URL de foto web, Google o Memorias@LIFIA)"
+                        value={newNodeData.photoUrl || ''}
+                        onChange={(e) => setNewNodeData({ ...newNodeData, photoUrl: e.target.value })}
+                        style={{ flex: 1, fontSize: '0.78rem', padding: '6px 10px' }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Campos específicos para Conferencia y Revista */}
                 {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && (

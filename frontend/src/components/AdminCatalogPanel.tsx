@@ -8,6 +8,7 @@ interface CatalogItem {
   deadlineMonth?: string;
   subject?: string;
   externalUrl?: string;
+  photoUrl?: string;
 }
 
 interface AdminCatalogPanelProps {
@@ -65,7 +66,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       PREFIX schema: <http://schema.org/>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      SELECT DISTINCT ?node ?label ?type ?rank ?deadlineMonth ?subject ?externalUrl WHERE {
+      SELECT DISTINCT ?node ?label ?type ?rank ?deadlineMonth ?subject ?externalUrl ?photoUrl WHERE {
         ?node rdf:type <${typeUri}> .
         ?node rdfs:label ?label .
         OPTIONAL { ?node rdf:type ?type . FILTER(?type != <http://www.w3.org/2000/01/rdf-schema#Resource>) }
@@ -74,7 +75,10 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         OPTIONAL { ?node dcterms:subject ?subject }
         OPTIONAL { ?node schema:url ?url1 }
         OPTIONAL { ?node foaf:page ?url2 }
+        OPTIONAL { ?node schema:image ?img1 }
+        OPTIONAL { ?node foaf:depiction ?img2 }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+        BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
       } LIMIT 200
     `;
 
@@ -95,14 +99,16 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
           const deadlineMonth = b.deadlineMonth ? b.deadlineMonth.value : undefined;
           const subject = b.subject ? b.subject.value : undefined;
           const externalUrl = b.externalUrl ? b.externalUrl.value : undefined;
+          const photoUrl = b.photoUrl ? b.photoUrl.value : undefined;
 
           if (!itemMap[uri]) {
-            itemMap[uri] = { uri, label, type, rank, deadlineMonth, subject, externalUrl };
+            itemMap[uri] = { uri, label, type, rank, deadlineMonth, subject, externalUrl, photoUrl };
           } else {
             if (rank) itemMap[uri].rank = rank;
             if (deadlineMonth) itemMap[uri].deadlineMonth = deadlineMonth;
             if (subject) itemMap[uri].subject = subject;
             if (externalUrl) itemMap[uri].externalUrl = externalUrl;
+            if (photoUrl) itemMap[uri].photoUrl = photoUrl;
           }
         });
         setItems(Object.values(itemMap));
@@ -369,6 +375,14 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {item.photoUrl && (
+                      <img
+                        src={item.photoUrl}
+                        alt={item.label}
+                        referrerPolicy="no-referrer"
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                      />
+                    )}
                     <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>{item.label}</span>
                     {item.rank && (
                       <span style={{
