@@ -1270,11 +1270,15 @@ SELECT ?s ?p ?o WHERE {
         <${editingCatalogNode.uri}> rdfs:label "${editingCatalogNode.label}" .
     `;
 
-    if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
-    }
-    if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+    const isVenueType = editingCatalogNode.type === 'http://purl.org/ontology/bibo/Conference' || editingCatalogNode.type === 'http://purl.org/ontology/bibo/Journal';
+
+    if (isVenueType) {
+      if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
+      }
+      if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+      }
     }
     if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
       updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> "${editingCatalogNode.subject.trim()}" .`;
@@ -3126,7 +3130,11 @@ SELECT ?s ?p ?o WHERE {
                   <label style={{ fontSize: '0.78rem' }}>🔍 Buscar en el Banco General ({getCleanType(newNodeData.type)})</label>
                   <input
                     type="text"
-                    placeholder="Filtrar por nombre, ranking (CORE A*, Q1, etc.) o palabras clave..."
+                    placeholder={
+                      newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal'
+                        ? "Filtrar por nombre, ranking (CORE A*, Q1, etc.) o palabras clave..."
+                        : "Filtrar por nombre o palabras clave..."
+                    }
                     value={catalogSearchQuery}
                     onChange={(e) => setCatalogSearchQuery(e.target.value)}
                     style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: '0.82rem' }}
@@ -3188,8 +3196,12 @@ SELECT ?s ?p ?o WHERE {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                               <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
                               <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                                {item.rank && <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>}
-                                {item.deadlineMonth && <span style={{ background: 'rgba(163,217,201,0.2)', color: '#1B5346', padding: '1px 5px', borderRadius: '4px' }}>📅 {item.deadlineMonth}</span>}
+                                {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && item.rank && (
+                                  <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>
+                                )}
+                                {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && item.deadlineMonth && (
+                                  <span style={{ background: 'rgba(163,217,201,0.2)', color: '#1B5346', padding: '1px 5px', borderRadius: '4px' }}>📅 {item.deadlineMonth}</span>
+                                )}
                                 {item.subject && <span>{item.subject}</span>}
                               </div>
                             </div>
@@ -3232,36 +3244,38 @@ SELECT ?s ?p ?o WHERE {
                                 style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                               />
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <div className="form-group">
-                                <label style={{ fontSize: '0.72rem' }}>Ranking</label>
-                                <select
-                                  value={editingCatalogNode?.rank || ''}
-                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
-                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
-                                >
-                                  <option value="">-- Sin Ranking --</option>
-                                  <option value="CORE A*">CORE A*</option>
-                                  <option value="CORE A">CORE A</option>
-                                  <option value="CORE B">CORE B</option>
-                                  <option value="CORE C">CORE C</option>
-                                  <option value="Q1">Q1</option>
-                                  <option value="Q2">Q2</option>
-                                  <option value="Q3">Q3</option>
-                                  <option value="Q4">Q4</option>
-                                </select>
+                            {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div className="form-group">
+                                  <label style={{ fontSize: '0.72rem' }}>Ranking</label>
+                                  <select
+                                    value={editingCatalogNode?.rank || ''}
+                                    onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
+                                    style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                  >
+                                    <option value="">-- Sin Ranking --</option>
+                                    <option value="CORE A*">CORE A*</option>
+                                    <option value="CORE A">CORE A</option>
+                                    <option value="CORE B">CORE B</option>
+                                    <option value="CORE C">CORE C</option>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2">Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                  </select>
+                                </div>
+                                <div className="form-group">
+                                  <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
+                                  <input
+                                    type="text"
+                                    value={editingCatalogNode?.deadlineMonth || ''}
+                                    onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
+                                    placeholder="Ej: Marzo"
+                                    style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                  />
+                                </div>
                               </div>
-                              <div className="form-group">
-                                <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
-                                <input
-                                  type="text"
-                                  value={editingCatalogNode?.deadlineMonth || ''}
-                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
-                                  placeholder="Ej: Marzo"
-                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
-                                />
-                              </div>
-                            </div>
+                            )}
                             <div className="form-group">
                               <label style={{ fontSize: '0.72rem' }}>URL Oficial</label>
                               <input

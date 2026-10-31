@@ -352,8 +352,12 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         <${uri}> rdfs:label "${label.replace(/"/g, '\\"')}" .
     `;
 
-    if (rank) insertTriples += ` <${uri}> bibo:rank "${rank.replace(/"/g, '\\"')}" .`;
-    if (deadlineMonth) insertTriples += ` <${uri}> ex:submissionDeadlineMonth "${deadlineMonth.replace(/"/g, '\\"')}" .`;
+    const isVenueCategory = activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal';
+
+    if (isVenueCategory) {
+      if (rank) insertTriples += ` <${uri}> bibo:rank "${rank.replace(/"/g, '\\"')}" .`;
+      if (deadlineMonth) insertTriples += ` <${uri}> ex:submissionDeadlineMonth "${deadlineMonth.replace(/"/g, '\\"')}" .`;
+    }
     if (externalUrl) insertTriples += ` <${uri}> schema:url <${externalUrl}> .`;
     if (photoUrl) insertTriples += ` <${uri}> schema:image "${photoUrl.replace(/"/g, '\\"')}" .`;
     if (email) insertTriples += ` <${uri}> vivo:email "${email.replace(/"/g, '\\"')}" .`;
@@ -435,13 +439,15 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
     if (activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') {
       if (createForm.rank) insertQuery += ` <${nodeUri}> bibo:rank "${createForm.rank}" .`;
       if (createForm.deadlineMonth) insertQuery += ` <${nodeUri}> ex:submissionDeadlineMonth "${createForm.deadlineMonth}" .`;
-      if (createForm.externalUrl) insertQuery += ` <${nodeUri}> schema:url <${createForm.externalUrl}> .`;
-      if (createForm.subject) {
-        const subjects = createForm.subject.split(',').map(s => s.trim()).filter(Boolean);
-        subjects.forEach(s => {
-          insertQuery += ` <${nodeUri}> dcterms:subject "${s.replace(/"/g, '\\"')}" .`;
-        });
-      }
+    }
+    if (createForm.externalUrl) insertQuery += ` <${nodeUri}> schema:url <${createForm.externalUrl}> .`;
+    if (createForm.photoUrl) insertQuery += ` <${nodeUri}> schema:image "${createForm.photoUrl.replace(/"/g, '\\"')}" .`;
+    if (createForm.email) insertQuery += ` <${nodeUri}> <http://vivoweb.org/ontology/core#email> "${createForm.email.replace(/"/g, '\\"')}" .`;
+    if (createForm.subject) {
+      const subjects = createForm.subject.split(',').map(s => s.trim()).filter(Boolean);
+      subjects.forEach(s => {
+        insertQuery += ` <${nodeUri}> dcterms:subject "${s.replace(/"/g, '\\"')}" .`;
+      });
     }
 
     insertQuery += ` }`;
@@ -554,7 +560,11 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         <div style={{ flex: 1, maxWidth: '420px', position: 'relative' }}>
           <input
             type="text"
-            placeholder={`🔍 Buscar ${currentCategoryObj.label.toLowerCase()} por nombre, rank o temática...`}
+            placeholder={
+              activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal'
+                ? `🔍 Buscar ${currentCategoryObj.label.toLowerCase()} por nombre, rank o temática...`
+                : `🔍 Buscar ${currentCategoryObj.label.toLowerCase()} por nombre, email o temática...`
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -603,7 +613,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                       />
                     )}
                     <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>{item.label}</span>
-                    {item.rank && (
+                    {(activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') && item.rank && (
                       <span style={{
                         background: 'rgba(193,127,89,0.18)', color: '#C17F59',
                         padding: '2px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700
@@ -611,7 +621,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                         {item.rank}
                       </span>
                     )}
-                    {item.deadlineMonth && (
+                    {(activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') && item.deadlineMonth && (
                       <span style={{
                         background: 'rgba(163,217,201,0.25)', color: '#1B5346',
                         padding: '2px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600
@@ -698,37 +708,39 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div className="form-group">
-                      <label style={{ fontSize: '0.75rem' }}>Ranking / Cuartil</label>
-                      <select
-                        value={editingItem.rank || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, rank: e.target.value })}
-                        style={{ fontSize: '0.82rem', padding: '6px 10px' }}
-                      >
-                        <option value="">-- Sin Ranking --</option>
-                        <option value="CORE A*">CORE A*</option>
-                        <option value="CORE A">CORE A</option>
-                        <option value="CORE B">CORE B</option>
-                        <option value="CORE C">CORE C</option>
-                        <option value="Q1">Q1</option>
-                        <option value="Q2">Q2</option>
-                        <option value="Q3">Q3</option>
-                        <option value="Q4">Q4</option>
-                      </select>
-                    </div>
+                  {(activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label style={{ fontSize: '0.75rem' }}>Ranking / Cuartil</label>
+                        <select
+                          value={editingItem.rank || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, rank: e.target.value })}
+                          style={{ fontSize: '0.82rem', padding: '6px 10px' }}
+                        >
+                          <option value="">-- Sin Ranking --</option>
+                          <option value="CORE A*">CORE A*</option>
+                          <option value="CORE A">CORE A</option>
+                          <option value="CORE B">CORE B</option>
+                          <option value="CORE C">CORE C</option>
+                          <option value="Q1">Q1</option>
+                          <option value="Q2">Q2</option>
+                          <option value="Q3">Q3</option>
+                          <option value="Q4">Q4</option>
+                        </select>
+                      </div>
 
-                    <div className="form-group">
-                      <label style={{ fontSize: '0.75rem' }}>Mes de Deadline</label>
-                      <input
-                        type="text"
-                        value={editingItem.deadlineMonth || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, deadlineMonth: e.target.value })}
-                        placeholder="Ej: Marzo"
-                        style={{ fontSize: '0.82rem', padding: '6px 10px' }}
-                      />
+                      <div className="form-group">
+                        <label style={{ fontSize: '0.75rem' }}>Mes de Deadline</label>
+                        <input
+                          type="text"
+                          value={editingItem.deadlineMonth || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, deadlineMonth: e.target.value })}
+                          placeholder="Ej: Marzo"
+                          style={{ fontSize: '0.82rem', padding: '6px 10px' }}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="form-group">
                     <label style={{ fontSize: '0.75rem' }}>URL Oficial / Perfil</label>
@@ -829,104 +841,125 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
             </div>
 
             {(activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') && (
-              <>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label>Ranking / Cuartil</label>
-                    <select
-                      value={createForm.rank}
-                      onChange={(e) => setCreateForm({ ...createForm, rank: e.target.value })}
-                    >
-                      <option value="CORE A*">CORE A*</option>
-                      <option value="CORE A">CORE A</option>
-                      <option value="CORE B">CORE B</option>
-                      <option value="CORE C">CORE C</option>
-                      <option value="Q1">Q1</option>
-                      <option value="Q2">Q2</option>
-                      <option value="Q3">Q3</option>
-                      <option value="Q4">Q4</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label>Mes de Deadline</label>
-                    <select
-                      value={createForm.deadlineMonth}
-                      onChange={(e) => setCreateForm({ ...createForm, deadlineMonth: e.target.value })}
-                    >
-                      <option value="Enero">Enero</option>
-                      <option value="Febrero">Febrero</option>
-                      <option value="Marzo">Marzo</option>
-                      <option value="Abril">Abril</option>
-                      <option value="Mayo">Mayo</option>
-                      <option value="Junio">Junio</option>
-                      <option value="Julio">Julio</option>
-                      <option value="Agosto">Agosto</option>
-                      <option value="Septiembre">Septiembre</option>
-                      <option value="Octubre">Octubre</option>
-                      <option value="Noviembre">Noviembre</option>
-                      <option value="Diciembre">Diciembre</option>
-                    </select>
-                  </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Ranking / Cuartil</label>
+                  <select
+                    value={createForm.rank}
+                    onChange={(e) => setCreateForm({ ...createForm, rank: e.target.value })}
+                  >
+                    <option value="CORE A*">CORE A*</option>
+                    <option value="CORE A">CORE A</option>
+                    <option value="CORE B">CORE B</option>
+                    <option value="CORE C">CORE C</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
                 </div>
 
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Mes de Deadline</label>
+                  <select
+                    value={createForm.deadlineMonth}
+                    onChange={(e) => setCreateForm({ ...createForm, deadlineMonth: e.target.value })}
+                  >
+                    <option value="Enero">Enero</option>
+                    <option value="Febrero">Febrero</option>
+                    <option value="Marzo">Marzo</option>
+                    <option value="Abril">Abril</option>
+                    <option value="Mayo">Mayo</option>
+                    <option value="Junio">Junio</option>
+                    <option value="Julio">Julio</option>
+                    <option value="Agosto">Agosto</option>
+                    <option value="Septiembre">Septiembre</option>
+                    <option value="Octubre">Octubre</option>
+                    <option value="Noviembre">Noviembre</option>
+                    <option value="Diciembre">Diciembre</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {(activeCategory.includes('FacultyMember') || activeCategory.includes('GraduateStudent') || activeCategory.includes('UndergraduateStudent')) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
-                  <label>URL Oficial</label>
+                  <label>URL Foto de Perfil (schema:image)</label>
                   <input
-                    type="text"
-                    placeholder="https://iswc2026.semanticweb.org"
-                    value={createForm.externalUrl}
-                    onChange={(e) => setCreateForm({ ...createForm, externalUrl: e.target.value })}
+                    type="url"
+                    placeholder="https://..."
+                    value={createForm.photoUrl}
+                    onChange={(e) => setCreateForm({ ...createForm, photoUrl: e.target.value })}
                   />
                 </div>
-
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>🏷️ Temáticas CSO (Autocompletar)</span>
-                  </label>
+                <div className="form-group">
+                  <label>Email (vivo:email)</label>
                   <input
-                    type="text"
-                    placeholder="Escriba para sugerir tópicos CSO..."
-                    value={csoSearch}
-                    onFocus={() => fetchCSOTopics('a')}
-                    onChange={(e) => {
-                      setCsoSearch(e.target.value);
-                      fetchCSOTopics(e.target.value);
-                    }}
+                    type="email"
+                    placeholder="nombre@lifia.info.unlp.edu.ar"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                   />
+                </div>
+              </div>
+            )}
 
-                  {csoTopicsList.length > 0 && (
-                    <div style={{
-                      position: 'absolute', top: '100%', left: 0, width: '100%',
-                      maxHeight: '140px', overflowY: 'auto', background: 'var(--bg-mantle)',
-                      border: '1px solid var(--border-color)', borderRadius: '8px', zIndex: 10
-                    }}>
-                      {csoTopicsList.map(t => (
-                        <div
-                          key={t.uri}
-                          onClick={() => {
-                            const current = createForm.subject ? createForm.subject.split(',').map(s => s.trim()) : [];
-                            if (!current.includes(t.label)) {
-                              current.push(t.label);
-                              setCreateForm({ ...createForm, subject: current.join(', ') });
-                            }
-                            setCsoSearch('');
-                          }}
-                          style={{ padding: '6px 10px', fontSize: '0.8rem', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                        >
-                          🏷️ {t.label}
-                        </div>
-                      ))}
+            <div className="form-group">
+              <label>URL Oficial / Perfil</label>
+              <input
+                type="text"
+                placeholder="https://..."
+                value={createForm.externalUrl}
+                onChange={(e) => setCreateForm({ ...createForm, externalUrl: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>🏷️ Temáticas CSO (Autocompletar)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Escriba para sugerir tópicos CSO..."
+                value={csoSearch}
+                onFocus={() => fetchCSOTopics('a')}
+                onChange={(e) => {
+                  setCsoSearch(e.target.value);
+                  fetchCSOTopics(e.target.value);
+                }}
+              />
+
+              {csoTopicsList.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, width: '100%',
+                  maxHeight: '140px', overflowY: 'auto', background: 'var(--bg-mantle)',
+                  border: '1px solid var(--border-color)', borderRadius: '8px', zIndex: 10
+                }}>
+                  {csoTopicsList.map(t => (
+                    <div
+                      key={t.uri}
+                      onClick={() => {
+                        const current = createForm.subject ? createForm.subject.split(',').map(s => s.trim()) : [];
+                        if (!current.includes(t.label)) {
+                          current.push(t.label);
+                          setCreateForm({ ...createForm, subject: current.join(', ') });
+                        }
+                        setCsoSearch('');
+                      }}
+                      style={{ padding: '6px 10px', fontSize: '0.8rem', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    >
+                      🏷️ {t.label}
                     </div>
-                  )}
+                  ))}
                 </div>
+              )}
+            </div>
 
-                {createForm.subject && (
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Temáticas seleccionadas: <strong>{createForm.subject}</strong>
-                  </div>
-                )}
-              </>
+            {createForm.subject && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Temáticas seleccionadas: <strong>{createForm.subject}</strong>
+              </div>
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
