@@ -128,11 +128,12 @@ let lifiaMembersCache = {
 };
 const LIFIA_CACHE_TTL_MS = 1000 * 60 * 60; // 1 hora
 
-// Endpoint para obtener miembros y fotos desde memorias.lifia.info.unlp.edu.ar/members
+// Endpoint para obtener miembros, cargos, emails y fotos desde memorias.lifia.info.unlp.edu.ar/members
 app.get('/api/lifia-members', checkAuth, async (req, res) => {
   try {
+    const forceRefresh = req.query.refresh === 'true';
     const now = Date.now();
-    if (lifiaMembersCache.data && (now - lifiaMembersCache.fetchedAt) < LIFIA_CACHE_TTL_MS) {
+    if (!forceRefresh && lifiaMembersCache.data && (now - lifiaMembersCache.fetchedAt) < LIFIA_CACHE_TTL_MS) {
       return res.json({ members: lifiaMembersCache.data, cached: true });
     }
 
@@ -164,6 +165,17 @@ app.get('/api/lifia-members', checkAuth, async (req, res) => {
       return res.status(502).json({ error: 'No se pudo obtener el listado de miembros desde Memorias@LIFIA.' });
     }
 
+    const mapPositionToVivoType = (pos) => {
+      const p = (pos || '').toLowerCase().trim();
+      if (p.includes('posgrado') || p.includes('phd') || p.includes('doctorando') || p.includes('maestr')) {
+        return 'http://vivoweb.org/ontology/core#GraduateStudent';
+      }
+      if (p.includes('grado') || p.includes('undergraduate') || p.includes('becario de entrenamiento') || p.includes('tesista de grado')) {
+        return 'http://vivoweb.org/ontology/core#UndergraduateStudent';
+      }
+      return 'http://vivoweb.org/ontology/core#FacultyMember';
+    };
+
     const membersMap = new Map();
     const cardRegex = /<a[^>]+href="(\/members\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
     let match;
@@ -174,10 +186,11 @@ app.get('/api/lifia-members', checkAuth, async (req, res) => {
 
       const imgMatch = cardHtml.match(/<img[^>]+alt="([^"]*)"[^>]+src="([^"]+)"/i) ||
                        cardHtml.match(/<img[^>]+src="([^"]+)"[^>]+alt="([^"]*)"/i);
-      const h3Match = cardHtml.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+      const h3Match = cardHtml.match(/<h3[^>]*>([\s\S]*?)<\/h3>(?:\s*<span[^>]*>([\s\S]*?)<\/span>)?/i);
 
       let rawName = '';
       let photoUrl = '';
+      let position = '';
 
       if (imgMatch) {
         if (cardHtml.indexOf('alt=') < cardHtml.indexOf('src=')) {
@@ -192,16 +205,35 @@ app.get('/api/lifia-members', checkAuth, async (req, res) => {
       if (h3Match) {
         const cleanH3 = h3Match[1].replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         if (cleanH3) rawName = cleanH3;
+        if (h3Match[2]) {
+          position = h3Match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
       } else if (rawName) {
         rawName = rawName.replace(/\s+/g, ' ').trim();
       }
 
-      if (rawName && photoUrl) {
+      const degreeMatch = cardHtml.match(/Degree:<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/i);
+      const emailMatch = cardHtml.match(/Email:<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/i);
+      const degree = degreeMatch ? degreeMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+      const email = emailMatch ? emailMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+      const tagMatches = [...cardHtml.matchAll(/<span class="MuiChip-label[^"]*">#?([^<]+)<\/span>/gi)];
+      const tags = tagMatches.map(m => m[1].trim()).filter(Boolean).join(', ');
+
+      if (rawName) {
         const slug = relativeUrl.replace('/members/', '');
+        const uriSuffix = slug.split('-').filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
         membersMap.set(slug, {
           slug,
+          uriSuffix,
+          uri: `http://example.org/resource/${uriSuffix}`,
           name: rawName,
-          photoUrl,
+          position: position || 'Investigador',
+          vivoType: mapPositionToVivoType(position),
+          degree,
+          email,
+          tags,
+          photoUrl: photoUrl || '',
           profileUrl: `https://memorias.lifia.info.unlp.edu.ar${relativeUrl}`
         });
       }

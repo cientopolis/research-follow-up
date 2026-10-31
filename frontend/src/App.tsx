@@ -123,6 +123,7 @@ export default function App() {
   const [associatedResearcher, setAssociatedResearcher] = useState<string | null>(null);
   const [configNewNode, setConfigNewNode] = useState({ label: '', uriSuffix: '' });
   const [configSelectUri, setConfigSelectUri] = useState('');
+  const [catalogResearchers, setCatalogResearchers] = useState<{ uri: string; label: string }[]>([]);
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -290,7 +291,7 @@ SELECT ?s ?p ?o WHERE {
 
   // Catalog / Shared Node Bank state
   const [nodeModeTab, setNodeModeTab] = useState<'catalog' | 'new'>('catalog');
-  const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string }[]>([]);
+  const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string; photoUrl?: string }[]>([]);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [editingCatalogNode, setEditingCatalogNode] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } | null>(null);
@@ -394,18 +395,20 @@ SELECT ?s ?p ?o WHERE {
       PREFIX schema: <http://schema.org/>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      SELECT DISTINCT ?node ?label ?type ?rank ?deadlineMonth ?subject ?externalUrl WHERE {
+      SELECT DISTINCT ?node ?label ?rank ?deadlineMonth ?subject ?externalUrl ?photoUrl WHERE {
         ?node rdf:type <${finalType}> .
         ?node rdfs:label ?label .
-        OPTIONAL { ?node rdf:type ?type . FILTER(?type != <http://www.w3.org/2000/01/rdf-schema#Resource>) }
         OPTIONAL { ?node bibo:rank ?rank }
         OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
         OPTIONAL { ?node dcterms:subject ?subject }
         OPTIONAL { ?node schema:url ?url1 }
         OPTIONAL { ?node foaf:page ?url2 }
+        OPTIONAL { ?node schema:image ?img1 }
+        OPTIONAL { ?node foaf:depiction ?img2 }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
+        BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
         FILTER(STRSTARTS(STR(?node), "http://example.org/"))
-      } LIMIT 100
+      } LIMIT 1000
     `;
 
     try {
@@ -416,29 +419,36 @@ SELECT ?s ?p ?o WHERE {
       });
       const data = await response.json();
       if (data.results && data.results.bindings) {
-        const catalogMap: { [uri: string]: { uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string } } = {};
+        const catalogMap: { [uri: string]: { uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string; photoUrl?: string } } = {};
         
         data.results.bindings.forEach((b: any) => {
           const uri = b.node.value;
           const label = b.label.value;
-          const type = b.type ? b.type.value : targetType;
+          const type = targetType;
           const rank = b.rank ? b.rank.value : undefined;
           const deadlineMonth = b.deadlineMonth ? b.deadlineMonth.value : undefined;
           const subject = b.subject ? b.subject.value : undefined;
           const externalUrl = b.externalUrl ? b.externalUrl.value : undefined;
+          const photoUrl = b.photoUrl ? b.photoUrl.value : undefined;
 
           if (!catalogMap[uri]) {
-            catalogMap[uri] = { uri, label, type, rank, deadlineMonth, subject, externalUrl };
+            catalogMap[uri] = { uri, label, type, rank, deadlineMonth, subject, externalUrl, photoUrl };
           } else {
             // Prioritize specific values if present in multiple bindings
             if (rank) catalogMap[uri].rank = rank;
             if (deadlineMonth) catalogMap[uri].deadlineMonth = deadlineMonth;
-            if (subject) catalogMap[uri].subject = subject;
+            if (subject) {
+              const currentSubjects = catalogMap[uri].subject ? catalogMap[uri].subject!.split(',').map(s => s.trim()) : [];
+              if (!currentSubjects.includes(subject)) {
+                catalogMap[uri].subject = [...currentSubjects, subject].join(', ');
+              }
+            }
             if (externalUrl) catalogMap[uri].externalUrl = externalUrl;
+            if (photoUrl) catalogMap[uri].photoUrl = photoUrl;
           }
         });
 
-        setGlobalCatalogNodes(Object.values(catalogMap));
+        setGlobalCatalogNodes(Object.values(catalogMap).sort((a, b) => a.label.localeCompare(b.label, 'es')));
       }
     } catch (e) {
       console.error('Error al cargar catálogo global', e);
@@ -569,6 +579,34 @@ SELECT ?s ?p ?o WHERE {
     }
   }, [useInference]);
 
+  const fetchCatalogResearchers = async () => {
+    const query = `
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      SELECT DISTINCT ?node ?label WHERE {
+        ?node rdf:type <http://vivoweb.org/ontology/core#FacultyMember> .
+        ?node rdfs:label ?label .
+      } LIMIT 1000
+    `;
+    try {
+      const response = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, infer: true })
+      });
+      const data = await response.json();
+      if (data.results && data.results.bindings) {
+        const map = new Map<string, { uri: string; label: string }>();
+        data.results.bindings.forEach((b: any) => {
+          map.set(b.node.value, { uri: b.node.value, label: b.label.value });
+        });
+        setCatalogResearchers(Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'es')));
+      }
+    } catch (e) {
+      console.error("Error al consultar investigadores del catálogo:", e);
+    }
+  };
+
   const fetchAssociatedResearcher = async () => {
     if (!user) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
@@ -598,6 +636,7 @@ SELECT ?s ?p ?o WHERE {
   const linkResearcher = async (researcherUri: string) => {
     if (!user) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
+    const alreadyInCanvas = nodes.some(n => n.uri === researcherUri);
     
     // First, delete any previous association
     const deleteQuery = `
@@ -606,10 +645,14 @@ SELECT ?s ?p ?o WHERE {
         <${userUri}> rfu:associatedResearcher ?r .
       }
     `;
+    const canvasTriples = alreadyInCanvas
+      ? ''
+      : `<${researcherUri}> rfu:inCanvasOf <${userUri}> ; <http://example.org/resource/posX> "150" ; <http://example.org/resource/posY> "150" .`;
     const insertQuery = `
       PREFIX rfu: <http://cientopolis.org/rfu/>
       INSERT DATA {
         <${userUri}> rfu:associatedResearcher <${researcherUri}> .
+        ${canvasTriples}
       }
     `;
     try {
@@ -624,6 +667,9 @@ SELECT ?s ?p ?o WHERE {
         body: JSON.stringify({ query: insertQuery })
       });
       setAssociatedResearcher(researcherUri);
+      if (!alreadyInCanvas) {
+        await fetchGraphData();
+      }
     } catch (e) {
       console.error("Error al vincular investigador:", e);
     }
@@ -1224,11 +1270,15 @@ SELECT ?s ?p ?o WHERE {
         <${editingCatalogNode.uri}> rdfs:label "${editingCatalogNode.label}" .
     `;
 
-    if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
-    }
-    if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+    const isVenueType = editingCatalogNode.type === 'http://purl.org/ontology/bibo/Conference' || editingCatalogNode.type === 'http://purl.org/ontology/bibo/Journal';
+
+    if (isVenueType) {
+      if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
+      }
+      if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+      }
     }
     if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
       updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> "${editingCatalogNode.subject.trim()}" .`;
@@ -1829,6 +1879,7 @@ SELECT ?s ?p ?o WHERE {
                   onClick={() => {
                     setShowConfigModal(true);
                     setIsUserMenuOpen(false);
+                    fetchCatalogResearchers();
                   }}
                   style={{
                     background: 'none',
@@ -3079,7 +3130,11 @@ SELECT ?s ?p ?o WHERE {
                   <label style={{ fontSize: '0.78rem' }}>🔍 Buscar en el Banco General ({getCleanType(newNodeData.type)})</label>
                   <input
                     type="text"
-                    placeholder="Filtrar por nombre, ranking (CORE A*, Q1, etc.) o palabras clave..."
+                    placeholder={
+                      newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal'
+                        ? "Filtrar por nombre, ranking (CORE A*, Q1, etc.) o palabras clave..."
+                        : "Filtrar por nombre o palabras clave..."
+                    }
                     value={catalogSearchQuery}
                     onChange={(e) => setCatalogSearchQuery(e.target.value)}
                     style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: '0.82rem' }}
@@ -3129,12 +3184,26 @@ SELECT ?s ?p ?o WHERE {
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
-                            <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              {item.rank && <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>}
-                              {item.deadlineMonth && <span style={{ background: 'rgba(163,217,201,0.2)', color: '#1B5346', padding: '1px 5px', borderRadius: '4px' }}>📅 {item.deadlineMonth}</span>}
-                              {item.subject && <span>{item.subject}</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            {item.photoUrl && (
+                              <img
+                                src={item.photoUrl}
+                                alt={item.label}
+                                referrerPolicy="no-referrer"
+                                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                              />
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                              <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>{item.label}</span>
+                              <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                                {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && item.rank && (
+                                  <span style={{ background: 'rgba(193,127,89,0.15)', color: '#C17F59', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>{item.rank}</span>
+                                )}
+                                {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && item.deadlineMonth && (
+                                  <span style={{ background: 'rgba(163,217,201,0.2)', color: '#1B5346', padding: '1px 5px', borderRadius: '4px' }}>📅 {item.deadlineMonth}</span>
+                                )}
+                                {item.subject && <span>{item.subject}</span>}
+                              </div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
@@ -3175,36 +3244,38 @@ SELECT ?s ?p ?o WHERE {
                                 style={{ fontSize: '0.78rem', padding: '4px 8px' }}
                               />
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <div className="form-group">
-                                <label style={{ fontSize: '0.72rem' }}>Ranking</label>
-                                <select
-                                  value={editingCatalogNode?.rank || ''}
-                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
-                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
-                                >
-                                  <option value="">-- Sin Ranking --</option>
-                                  <option value="CORE A*">CORE A*</option>
-                                  <option value="CORE A">CORE A</option>
-                                  <option value="CORE B">CORE B</option>
-                                  <option value="CORE C">CORE C</option>
-                                  <option value="Q1">Q1</option>
-                                  <option value="Q2">Q2</option>
-                                  <option value="Q3">Q3</option>
-                                  <option value="Q4">Q4</option>
-                                </select>
+                            {(newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div className="form-group">
+                                  <label style={{ fontSize: '0.72rem' }}>Ranking</label>
+                                  <select
+                                    value={editingCatalogNode?.rank || ''}
+                                    onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, rank: e.target.value })}
+                                    style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                  >
+                                    <option value="">-- Sin Ranking --</option>
+                                    <option value="CORE A*">CORE A*</option>
+                                    <option value="CORE A">CORE A</option>
+                                    <option value="CORE B">CORE B</option>
+                                    <option value="CORE C">CORE C</option>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2">Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                  </select>
+                                </div>
+                                <div className="form-group">
+                                  <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
+                                  <input
+                                    type="text"
+                                    value={editingCatalogNode?.deadlineMonth || ''}
+                                    onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
+                                    placeholder="Ej: Marzo"
+                                    style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+                                  />
+                                </div>
                               </div>
-                              <div className="form-group">
-                                <label style={{ fontSize: '0.72rem' }}>Mes de Deadline</label>
-                                <input
-                                  type="text"
-                                  value={editingCatalogNode?.deadlineMonth || ''}
-                                  onChange={(e) => editingCatalogNode && setEditingCatalogNode({ ...editingCatalogNode, deadlineMonth: e.target.value })}
-                                  placeholder="Ej: Marzo"
-                                  style={{ fontSize: '0.78rem', padding: '4px 8px' }}
-                                />
-                              </div>
-                            </div>
+                            )}
                             <div className="form-group">
                               <label style={{ fontSize: '0.72rem' }}>URL Oficial</label>
                               <input
@@ -3704,9 +3775,9 @@ SELECT ?s ?p ?o WHERE {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ background: 'rgba(76, 79, 105, 0.05)', padding: '16px', borderRadius: '12px', border: '1px solid var(--color-investigador)' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--color-investigador)', fontWeight: 600, marginBottom: '6px' }}>ESTADO DE VINCULACIÓN</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    ✅ Vinculado a: <strong>{nodes.find(n => n.uri === associatedResearcher)?.label || getCleanLabel(associatedResearcher)}</strong>
-                  </div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      ✅ Vinculado a: <strong>{nodes.find(n => n.uri === associatedResearcher)?.label || catalogResearchers.find(r => r.uri === associatedResearcher)?.label || getCleanLabel(associatedResearcher)}</strong>
+                    </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', wordBreak: 'break-all' }}>
                     URI: {associatedResearcher}
                   </div>
@@ -3737,12 +3808,20 @@ SELECT ?s ?p ?o WHERE {
                       style={{ flex: 1 }}
                     >
                       <option value="">-- Seleccionar investigador --</option>
-                      {nodes
-                        .filter(n => n.type.includes('FacultyMember'))
-                        .map(n => (
-                          <option key={n.uri} value={n.uri}>{n.label}</option>
-                        ))
-                      }
+                      {(() => {
+                        const map = new Map<string, string>();
+                        nodes
+                          .filter(n => n.type.includes('FacultyMember'))
+                          .forEach(n => map.set(n.uri, n.label));
+                        catalogResearchers.forEach(r => {
+                          if (!map.has(r.uri)) map.set(r.uri, r.label);
+                        });
+                        return Array.from(map.entries())
+                          .sort((a, b) => a[1].localeCompare(b[1], 'es'))
+                          .map(([uri, label]) => (
+                            <option key={uri} value={uri}>{label}</option>
+                          ));
+                      })()}
                     </select>
                     <button 
                       className="btn btn-primary" 

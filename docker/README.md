@@ -57,9 +57,10 @@ cd research-follow-up
 
 ### 3.1. Crear y configurar el proyecto en Firebase Console (Plan Spark Gratuito)
 1. Entrá a [console.firebase.google.com](https://console.firebase.google.com/) y creá un proyecto (ej. `dire-atento`).
-2. **Habilitar login por correo:**
+2. **Habilitar métodos de acceso (Correo y Google / Gmail):**
    - En el menú izquierdo, entrá a **Compilación → Authentication → Comenzar → Sign-in method (Método de acceso)**.
    - Elegí **Correo electrónico/contraseña**, habilitalo y guardá.
+   - Si querés permitir inicio de sesión con cuentas de **Gmail / Google**: hacé clic en **Agregar nuevo proveedor** → **Google**, activá el interruptor **Habilitar**, seleccioná tu correo en *Correo electrónico de asistencia del proyecto* (o configuralo en ⚙️ *Configuración del proyecto → General*) y presioná **Guardar**.
 3. **Autorizar la IP o dominio de tu servidor Linux:**
    - En **Authentication → Settings (Configuración) → Dominios autorizados**, hacé clic en **Agregar dominio** y agregá la IP o el dominio público de tu servidor Linux.
 4. **Obtener las credenciales `firebaseConfig` de la Web App:**

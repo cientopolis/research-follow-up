@@ -646,4 +646,114 @@ describe('App Canvas Component Tests', () => {
       expect(savedInsertQuery).toContain('https://magictowers.github.io/assets/img/foto_diego-800.webp');
     });
   });
+
+  it('debe permitir al SuperAdmin realizar la carga automática masiva de personas desde Memorias@LIFIA hacia GraphDB', async () => {
+    if (auth.currentUser) {
+      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+    }
+
+    let executedInsertSparql = '';
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      if (typeof url === 'string' && url.includes('/api/lifia-members')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            members: [
+              {
+                slug: 'diego-torres',
+                uriSuffix: 'DiegoTorres',
+                uri: 'http://example.org/resource/DiegoTorres',
+                name: 'Diego Torres',
+                position: 'Researcher',
+                vivoType: 'http://vivoweb.org/ontology/core#FacultyMember',
+                degree: 'Doctor en Ciencias Informáticas',
+                email: 'diego.torres@lifia.info.unlp.edu.ar',
+                tags: 'semantic web, citizen science',
+                photoUrl: 'https://magictowers.github.io/assets/img/foto_diego-800.webp',
+                profileUrl: 'https://memorias.lifia.info.unlp.edu.ar/members/diego-torres'
+              },
+              {
+                slug: 'carine-breidy',
+                uriSuffix: 'CarineBreidy',
+                uri: 'http://example.org/resource/CarineBreidy',
+                name: 'Carine Breidy',
+                position: 'Estudiante de posgrado',
+                vivoType: 'http://vivoweb.org/ontology/core#GraduateStudent',
+                degree: 'Máster en Ciencia de Datos',
+                email: 'carine.breidy@lifia.info.unlp.edu.ar',
+                tags: '',
+                photoUrl: 'https://centrolifia.wordpress.com/wp-content/uploads/2025/11/foto-carine.jpg',
+                profileUrl: 'https://memorias.lifia.info.unlp.edu.ar/members/carine-breidy'
+              }
+            ]
+          })
+        });
+      }
+
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('INSERT DATA') && query.includes('DiegoTorres')) {
+        executedInsertSparql = query;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      if (query.includes('DELETE WHERE')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    // Ir a Gestión del Catálogo (Admin)
+    fireEvent.click(screen.getByText(/Gestión del Catálogo \(Admin\)/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/🏛️ Carga Automática desde Memorias@LIFIA/i)).toBeInTheDocument();
+    });
+
+    // Abrir modal de Carga Automática desde Memorias@LIFIA
+    fireEvent.click(screen.getByText(/🏛️ Carga Automática desde Memorias@LIFIA/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Carga Automática de Personas desde Memorias@LIFIA/i)).toBeInTheDocument();
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+    });
+
+    // Ejecutar importación masiva
+    const importBtn = screen.getByText(/🚀 Importar \/ Sincronizar Seleccionados \(2\)/i);
+    fireEvent.click(importBtn);
+
+    await waitFor(() => {
+      expect(executedInsertSparql).toContain('<http://example.org/resource/DiegoTorres> rdf:type <http://vivoweb.org/ontology/core#FacultyMember>');
+      expect(executedInsertSparql).toContain('<http://example.org/resource/CarineBreidy> rdf:type <http://vivoweb.org/ontology/core#GraduateStudent>');
+      expect(executedInsertSparql).toContain('diego.torres@lifia.info.unlp.edu.ar');
+      expect(executedInsertSparql).toContain('https://magictowers.github.io/assets/img/foto_diego-800.webp');
+      expect(screen.getByText(/Se sincronizaron 2 personas desde Memorias@LIFIA en GraphDB/i)).toBeInTheDocument();
+    });
+  });
 });

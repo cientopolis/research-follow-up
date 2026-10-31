@@ -143,6 +143,14 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Bitácora de Sesiones y Asistencia (`rfu:MeetingSession`)**: Historial por cada encuentro con registro de fecha, notas/minutas de avance y control de asistencia por participante (`rfu:attendedBy`), además de enlaces directos a videollamadas (Meet/Zoom) y documentos compartidos.
 *   **Panel de Gestión del Catálogo Compartido (`👑 Gestión del Catálogo - Admin`)**:
     *   Vista administrativa exclusiva para usuarios `SuperAdmin` que agrupa en pestañas las entidades globales del sistema (*Conferencias*, *Revistas*, *Tópicos CSO*, *Investigadores*, *Tesistas de Posgrado*, *Tesistas de Grado*, *Datasets*, *Archivos* y *Proyectos*), permitiendo búsqueda en tiempo real, alta, edición in-situ y eliminación controlada en GraphDB.
+    *   **Atributos específicos por categoría**: Los campos de **Ranking / Cuartil** (`bibo:rank`) y **Mes de Deadline** (`ex:submissionDeadlineMonth`) se habilitan únicamente para *Conferencias* y *Revistas*, mientras que para *Investigadores* y *Tesistas* se gestionan correo electrónico (`vivo:email`), foto de perfil (`schema:image`), enlace al perfil institucional (`schema:url`) y temáticas (`dcterms:subject`).
+    *   **Carga Automática desde Memorias@LIFIA (`🏛️ Carga Automática desde Memorias@LIFIA`)**: Herramienta para SuperAdmin que consulta el directorio oficial `https://memorias.lifia.info.unlp.edu.ar/members` (`GET /api/lifia-members`), detecta automáticamente el rol ontológico (`vivo:FacultyMember`, `vivo:GraduateStudent` o `vivo:UndergraduateStudent`), y sincroniza en lote nombres, cargos, correos, líneas de investigación y enlaces externos a sus fotos de perfil en GraphDB.
+*   **Fotos de Perfil de Personas (`schema:image`)**:
+    *   Los nodos de personas (*Investigadores*, *Tesistas de Posgrado* y *Tesistas de Grado*) muestran su foto de perfil circular en las tarjetas del lienzo, en el catálogo y en el inspector semántico.
+    *   Soporta tres fuentes de vinculación rápida (almacenando siempre **únicamente la URL externa** en GraphDB bajo el predicado `http://schema.org/image`, sin guardar binarios ni Base64 en la base):
+        1. **🌐 URL Web**: Enlace directo a cualquier imagen pública (`https://...`).
+        2. **🔵 Cuenta Google**: Vinculación con un clic al avatar de la cuenta Google autenticada en Firebase (`user.photoURL`).
+        3. **🏛️ Directorio Memorias@LIFIA**: Buscador integrado conectado a `memorias.lifia.info.unlp.edu.ar/members`.
 
 ---
 
