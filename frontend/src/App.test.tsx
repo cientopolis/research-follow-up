@@ -813,4 +813,100 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText(/Base de datos blanqueada correctamente/i)).toBeInTheDocument();
     });
   });
+
+  it('debe permitir abrir el Inspector Semántico de un conector y eliminar la relación entre dos nodos', async () => {
+    let deleteConnectionQuery = '';
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
+                  label: { value: 'Diego Torres' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' },
+                  type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                  label: { value: 'Carine Breidy' },
+                  x: { value: '400' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('SELECT DISTINCT ?from ?predicate ?to')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  from: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  predicate: { value: 'http://vivoweb.org/ontology/core#advisor' },
+                  to: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('DELETE DATA') && query.includes('http://vivoweb.org/ontology/core#advisor')) {
+        deleteConnectionQuery = query;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Esperar a que se rendericen ambos nodos y la etiqueta de la conexión "vivo:advisor"
+    await waitFor(() => {
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+      expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
+    });
+
+    // Hacer clic sobre el conector "vivo:advisor" para abrir el Inspector Semántico - Conector
+    fireEvent.click(screen.getByText('vivo:advisor'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Inspector Semántico\s*-\s*Conector/i)).toBeInTheDocument();
+      expect(screen.getByText(/🗑️ Eliminar Relación/i)).toBeInTheDocument();
+    });
+
+    // Hacer clic en "🗑️ Eliminar Relación"
+    fireEvent.click(screen.getByText(/🗑️ Eliminar Relación/i));
+
+    await waitFor(() => {
+      expect(deleteConnectionQuery).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres> <http://vivoweb.org/ontology/core#advisor> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy>');
+    });
+  });
 });

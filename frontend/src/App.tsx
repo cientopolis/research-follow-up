@@ -268,9 +268,10 @@ export default function App() {
   const [showRelationModal, setShowRelationModal] = useState(false);
   const [selectedRelationPredicate, setSelectedRelationPredicate] = useState('http://vivoweb.org/ontology/core#relatedBy');
 
-  // Connection predicate editing
+  // Connection predicate editing & deletion
   const [editingPredicate, setEditingPredicate] = useState<string>('');
   const [isSavingPredicate, setIsSavingPredicate] = useState(false);
+  const [isDeletingConnection, setIsDeletingConnection] = useState(false);
 
   // SPARQL console
   const [sparqlQuery, setSparqlQuery] = useState(`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -1581,6 +1582,35 @@ SELECT ?s ?p ?o WHERE {
       console.error('Error al actualizar predicado', e);
     } finally {
       setIsSavingPredicate(false);
+    }
+  };
+
+  // Delete an existing connection (relation) between two nodes
+  const deleteConnection = async () => {
+    if (!selectedConnection) return;
+    setIsDeletingConnection(true);
+    const deleteQuery = `
+      DELETE DATA {
+        <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
+      }
+    `;
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: deleteQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedConnection(null);
+        setIsInspectorOpen(false);
+        setEditingPredicate('');
+        await fetchGraphData();
+      }
+    } catch (e) {
+      console.error('Error al eliminar relación', e);
+    } finally {
+      setIsDeletingConnection(false);
     }
   };
 
@@ -3052,16 +3082,27 @@ SELECT ?s ?p ?o WHERE {
                   </div>
 
                   <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                    <button className="btn" onClick={() => { setSelectedConnection(null); setIsInspectorOpen(false); setEditingPredicate(''); }}>Cancelar</button>
                     <button
-                      id="btnGuardarPredicado"
-                      className="btn btn-primary"
-                      onClick={saveConnectionPredicate}
-                      disabled={isSavingPredicate || editingPredicate === selectedConnection.predicate}
-                      style={{ opacity: (isSavingPredicate || editingPredicate === selectedConnection.predicate) ? 0.55 : 1, transition: 'opacity 0.2s' }}
+                      id="btnEliminarRelacion"
+                      className="btn"
+                      onClick={deleteConnection}
+                      disabled={isDeletingConnection || isSavingPredicate}
+                      style={{ color: '#d20f39', borderColor: '#d20f39' }}
                     >
-                      {isSavingPredicate ? '⏳ Guardando...' : '💾 Guardar Predicado'}
+                      {isDeletingConnection ? '⏳ Eliminando...' : '🗑️ Eliminar Relación'}
                     </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn" onClick={() => { setSelectedConnection(null); setIsInspectorOpen(false); setEditingPredicate(''); }}>Cancelar</button>
+                      <button
+                        id="btnGuardarPredicado"
+                        className="btn btn-primary"
+                        onClick={saveConnectionPredicate}
+                        disabled={isSavingPredicate || isDeletingConnection || editingPredicate === selectedConnection.predicate}
+                        style={{ opacity: (isSavingPredicate || isDeletingConnection || editingPredicate === selectedConnection.predicate) ? 0.55 : 1, transition: 'opacity 0.2s' }}
+                      >
+                        {isSavingPredicate ? '⏳ Guardando...' : '💾 Guardar Predicado'}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}

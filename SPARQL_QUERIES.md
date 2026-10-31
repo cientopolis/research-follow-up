@@ -14,6 +14,7 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
   - [2.2 Obtener propiedades disponibles](#22-obtener-propiedades-disponibles)
   - [2.3 Actualizar detalles de un nodo](#23-actualizar-detalles-de-un-nodo)
   - [2.4 Crear una conexión entre nodos](#24-crear-una-conexión-entre-nodos)
+  - [2.5 Eliminar una conexión (relación) entre nodos](#25-eliminar-una-conexión-relación-entre-nodos)
 - [3. Consultas de la Funcionalidad Pomodoro](#3-consultas-de-la-funcionalidad-pomodoro)
   - [3.1 Obtener tareas del Pomodoro](#31-obtener-tareas-del-pomodoro)
   - [3.2 Crear una tarea en GraphDB](#32-crear-una-tarea-en-graphdb)
@@ -175,16 +176,22 @@ Elimina los triples antiguos e inserta los nuevos valores ingresados en el formu
     ```
 
 ### 2.4 Crear una conexión entre nodos
-Crea un enlace semántico directo (arista) entre dos recursos existentes usando una propiedad seleccionada (e.g., `vivo:relates` o `vivo:hasAdvisor`).
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L616)
+Crea un enlace semántico directo (arista) entre dos recursos existentes usando una propiedad seleccionada (e.g., `vivo:relates` o `vivo:advisor`).
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L1403)
 *   **Query**:
     ```sparql
-    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    PREFIX ex: <http://example.org/resource/>
-
     INSERT DATA {
       <${sourceURI}> <${predicate}> <${targetURI}> .
+    }
+    ```
+
+### 2.5 Eliminar una conexión (relación) entre nodos
+Elimina del Triplestore la tripleta exacta que vincula el nodo origen (`?from`) con el nodo destino (`?to`) mediante el predicado seleccionado desde la pantalla de **Inspector Semántico - Conector**.
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L1588)
+*   **Query**:
+    ```sparql
+    DELETE DATA {
+      <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
     }
     ```
 
