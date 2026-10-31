@@ -57,13 +57,16 @@ Obtiene todos los recursos del grafo que se originan bajo `http://example.org/` 
     ```
 
 ### 1.2 Obtener todas las conexiones
-Extrae las aristas semánticas dirigidas entre nodos del canvas, omitiendo relaciones de metadatos del canvas (como coordenadas, etiquetas o tipos RDF).
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L195)
+Extrae las aristas semánticas dirigidas entre nodos del canvas (creados por el usuario o incorporados desde el catálogo compartido con `rfu:inCanvasOf`), omitiendo relaciones de metadatos del canvas (como coordenadas, etiquetas o tipos RDF).
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L746)
 *   **Query**:
     ```sparql
-    SELECT ?from ?predicate ?to WHERE {
+    PREFIX rfu: <http://cientopolis.org/rfu/>
+    SELECT DISTINCT ?from ?predicate ?to WHERE {
       ?from ?predicate ?to .
-      FILTER(STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
+      { ?from rfu:createdBy <${userUri}> } UNION { ?from rfu:inCanvasOf <${userUri}> }
+      { ?to rfu:createdBy <${userUri}> } UNION { ?to rfu:inCanvasOf <${userUri}> }
+      FILTER(isURI(?to) && STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
       FILTER(?predicate != <http://example.org/resource/posX> && 
              ?predicate != <http://example.org/resource/posY> && 
              ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && 

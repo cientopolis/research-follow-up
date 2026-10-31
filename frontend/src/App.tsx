@@ -748,11 +748,11 @@ SELECT ?s ?p ?o WHERE {
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const query = `
       PREFIX rfu: <http://cientopolis.org/rfu/>
-      SELECT ?from ?predicate ?to WHERE {
+      SELECT DISTINCT ?from ?predicate ?to WHERE {
         ?from ?predicate ?to .
-        ?from rfu:createdBy <${userUri}> .
-        ?to rfu:createdBy <${userUri}> .
-        FILTER(STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
+        { ?from rfu:createdBy <${userUri}> } UNION { ?from rfu:inCanvasOf <${userUri}> }
+        { ?to rfu:createdBy <${userUri}> } UNION { ?to rfu:inCanvasOf <${userUri}> }
+        FILTER(isURI(?to) && STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
         FILTER(?predicate != <http://example.org/resource/posX> && ?predicate != <http://example.org/resource/posY> && ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && ?predicate != <http://www.w3.org/2000/01/rdf-schema#label> && ?predicate != <http://example.org/resource/status>)
       }
     `;
@@ -1503,7 +1503,10 @@ SELECT ?s ?p ?o WHERE {
       nodeToDelete.type.includes('Journal') ||
       nodeToDelete.type.includes('Topic') ||
       nodeToDelete.type.includes('Dataset') ||
-      nodeToDelete.type.includes('MediaObject')
+      nodeToDelete.type.includes('MediaObject') ||
+      nodeToDelete.type.includes('FacultyMember') ||
+      nodeToDelete.type.includes('GraduateStudent') ||
+      nodeToDelete.type.includes('UndergraduateStudent')
     );
 
     let query = '';
