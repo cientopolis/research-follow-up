@@ -152,27 +152,34 @@ Toda la configuración para contenedorizar la aplicación se encuentra aislada e
 
 ### Arquitectura de Producción (`docker/docker-compose.yml`)
 1. **`graphdb` (`ontotext/graphdb:10.7.0`)**: Base de datos RDF con volumen persistente (`direatento_graphdb_data`) para garantizar que tus grafos, reuniones, tesistas y ontologías no se pierdan nunca al actualizar el código.
-2. **`app` (`docker/Dockerfile`)**: Imagen **multi-etapa** que compila el frontend de React/Vite (`frontend/dist`) y lo sirve directamente desde el mismo servidor Express (`server.js`) en el puerto `3000`, incluyendo monitoreo automático en `/api/health`.
+2. **`app` (`docker/Dockerfile`)**: Imagen **multi-etapa** que compila el frontend de React/Vite (`frontend/dist`) y lo sirve directamente desde el mismo servidor Express (`server.js`), publicado en el puerto externo configurado en `PORT` (por defecto **`8080`**, o `80`), incluyendo monitoreo automático en `/api/health`.
 
-### Pasos Rápidos para Producción
-1. **Configurar variables de producción:**
+### Pasos Rápidos para Producción (en un servidor Linux limpio)
+1. **Instalar Docker, clonar el repositorio y configurar `docker/.env.production`:**
    ```bash
    cp docker/.env.production.example docker/.env.production
    ```
-   Completa en `docker/.env.production` las credenciales de GraphDB y de tu proyecto de **Firebase Authentication** (se recomienda el plan gratuito *Firebase Spark* en la nube, que soporta hasta 50.000 usuarios activos/mes sin costo y con persistencia total).
+   Completa en `docker/.env.production` el puerto público (`PORT=8080` o `PORT=80`) y los identificadores web de tu proyecto de **Firebase Authentication** (plan gratuito *Firebase Spark*). No es necesario guardar contraseñas en texto plano en este archivo.
 2. **Levantar el entorno completo por primera vez:**
    ```bash
    cd docker
    docker compose --env-file .env.production up -d --build
    ```
-3. **Actualizar gradualmente sin reiniciar la base de datos:**
+3. **Crear el repositorio `researcherDB` en GraphDB (`http://<IP>:7200`) y cargar las ontologías:**
+   ```bash
+   cd ..
+   python3 import_ontologies.py
+   ```
+4. **Ingresar como SuperAdmin:**
+   Regístrate o inicia sesión en `http://<IP>:8080` con el correo `admin@cientopolis.org` (o el configurado en `SUPERADMIN_EMAIL`) para habilitar automáticamente el panel de administración.
+5. **Actualizar gradualmente sin reiniciar la base de datos:**
    Cada vez que subas mejoras al repositorio Git, ejecuta:
    ```bash
    ./docker/deploy.sh
    ```
    Este script descarga los últimos cambios (`git pull`), recompila la imagen `app` y reemplaza **únicamente** el contenedor web (`--no-deps app`) sin detener ni reiniciar GraphDB.
 
-👉 Consulta la [**Guía Completa de Dockerización y Rollback en `docker/README.md`**](docker/README.md) para más detalles.
+👉 Consulta la [**Guía Completa Paso a Paso (Linux desde cero, Firebase, Puertos y Rollback) en `docker/README.md`**](docker/README.md).
 
 ---
 
