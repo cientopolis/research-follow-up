@@ -34,7 +34,7 @@ describe('App Canvas Component Tests', () => {
               results: {
                 bindings: [
                   {
-                    node: { value: 'http://example.org/resource/JuanPerez' },
+                    node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/JuanPerez' },
                     type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
                     label: { value: 'Juan Perez' },
                     x: { value: '150' },
@@ -48,9 +48,9 @@ describe('App Canvas Component Tests', () => {
       }
 
       if (query.includes('INSERT DATA')) {
-        // Verify that the query contains the rfu:createdBy relationship using the mocked user uid
+        // Verify that the query contains the rfu:createdBy relationship using the mocked user uid and the new base URI
         expect(query).toContain('rfu:createdBy <http://cientopolis.org/rfu/user/test-user-uid>');
-        expect(query).toContain('JuanPerez');
+        expect(query).toContain('http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/JuanPerez');
         expect(query).toContain('Juan Perez');
         
         return Promise.resolve({
@@ -129,7 +129,7 @@ describe('App Canvas Component Tests', () => {
             results: {
               bindings: [
                 {
-                  node: { value: 'http://example.org/resource/DrSmith' },
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DrSmith' },
                   type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
                   label: { value: 'Dr. Smith' },
                   x: { value: '200' },
@@ -157,7 +157,7 @@ describe('App Canvas Component Tests', () => {
               json: () => Promise.resolve({
                 results: {
                   bindings: [
-                    { researcher: { value: 'http://example.org/resource/DrSmith' } }
+                    { researcher: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DrSmith' } }
                   ]
                 }
               })
@@ -167,7 +167,7 @@ describe('App Canvas Component Tests', () => {
       }
 
       if (query.includes('INSERT DATA') && query.includes('rfu:associatedResearcher')) {
-        expect(query).toContain('rfu:associatedResearcher <http://example.org/resource/DrSmith>');
+        expect(query).toContain('rfu:associatedResearcher <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DrSmith>');
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ success: true })
@@ -204,7 +204,7 @@ describe('App Canvas Component Tests', () => {
 
     // Select "Dr. Smith" and link it
     const select = screen.getByDisplayValue('-- Seleccionar investigador --');
-    fireEvent.change(select, { target: { value: 'http://example.org/resource/DrSmith' } });
+    fireEvent.change(select, { target: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DrSmith' } });
 
     const linkBtn = screen.getByText('Vincular');
     fireEvent.click(linkBtn);
@@ -663,7 +663,7 @@ describe('App Canvas Component Tests', () => {
               {
                 slug: 'diego-torres',
                 uriSuffix: 'DiegoTorres',
-                uri: 'http://example.org/resource/DiegoTorres',
+                uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres',
                 name: 'Diego Torres',
                 position: 'Researcher',
                 vivoType: 'http://vivoweb.org/ontology/core#FacultyMember',
@@ -676,7 +676,7 @@ describe('App Canvas Component Tests', () => {
               {
                 slug: 'carine-breidy',
                 uriSuffix: 'CarineBreidy',
-                uri: 'http://example.org/resource/CarineBreidy',
+                uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy',
                 name: 'Carine Breidy',
                 position: 'Estudiante de posgrado',
                 vivoType: 'http://vivoweb.org/ontology/core#GraduateStudent',
@@ -749,11 +749,68 @@ describe('App Canvas Component Tests', () => {
     fireEvent.click(importBtn);
 
     await waitFor(() => {
-      expect(executedInsertSparql).toContain('<http://example.org/resource/DiegoTorres> rdf:type <http://vivoweb.org/ontology/core#FacultyMember>');
-      expect(executedInsertSparql).toContain('<http://example.org/resource/CarineBreidy> rdf:type <http://vivoweb.org/ontology/core#GraduateStudent>');
+      expect(executedInsertSparql).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres> rdf:type <http://vivoweb.org/ontology/core#FacultyMember>');
+      expect(executedInsertSparql).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy> rdf:type <http://vivoweb.org/ontology/core#GraduateStudent>');
       expect(executedInsertSparql).toContain('diego.torres@lifia.info.unlp.edu.ar');
       expect(executedInsertSparql).toContain('https://magictowers.github.io/assets/img/foto_diego-800.webp');
       expect(screen.getByText(/Se sincronizaron 2 personas desde Memorias@LIFIA en GraphDB/i)).toBeInTheDocument();
+    });
+  });
+
+  it('debe permitir al SuperAdmin blanquear / resetear la base de datos confirmando con la palabra BLANQUEAR', async () => {
+    if (auth.currentUser) {
+      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+    }
+
+    let resetEndpointCalled = false;
+
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/api/admin/reset-db')) {
+        resetEndpointCalled = true;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            message: 'Base de datos blanqueada correctamente. Se conservaron las ontologías base (VIVO, DBLP, CSO).'
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/Gestión del Catálogo \(Admin\)/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/🧹 Blanquear Base de Datos/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/🧹 Blanquear Base de Datos/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/⚠️ Blanquear \/ Resetear Base de Datos/i)).toBeInTheDocument();
+    });
+
+    const confirmInput = screen.getByPlaceholderText('BLANQUEAR');
+    fireEvent.change(confirmInput, { target: { value: 'BLANQUEAR' } });
+
+    const confirmBtn = screen.getByText(/🧹 Confirmar Blanqueo de Base/i);
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(resetEndpointCalled).toBe(true);
+      expect(screen.getByText(/Base de datos blanqueada correctamente/i)).toBeInTheDocument();
     });
   });
 });

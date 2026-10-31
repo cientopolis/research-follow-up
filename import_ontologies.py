@@ -73,6 +73,20 @@ def main():
         print(f"Error al conectar a GraphDB: {e}")
         print("Asegúrate de que GraphDB esté corriendo y de que el repositorio exista.")
         sys.exit(1)
+
+    # Si se pasa el argumento --reset o --clear, blanquear todos los statements del repositorio antes de recargar las ontologías
+    if '--reset' in sys.argv or '--clear' in sys.argv:
+        print(f"🧹 Blanqueando / reseteando todos los datos del repositorio '{repo}'...")
+        reset_req = urllib.request.Request(statements_endpoint, headers=headers, method='DELETE')
+        try:
+            with urllib.request.urlopen(reset_req) as response:
+                print(f"-> Repositorio '{repo}' blanqueado exitosamente (HTTP {response.status}).")
+        except urllib.error.HTTPError as e:
+            print(f"Error de HTTP al blanquear el repositorio: {e.code} - {e.read().decode('utf-8', errors='ignore')}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error inesperado al blanquear el repositorio: {e}")
+            sys.exit(1)
         
     # Cargar cada ontología
     for name, path, content_type in ontologies:

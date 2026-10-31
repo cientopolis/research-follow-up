@@ -36,33 +36,33 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   'FacultyMember': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
     { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/status', label: 'Estado' }
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status', label: 'Estado' }
   ],
   'GraduateStudent': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
     { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/status', label: 'Estado' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status', label: 'Estado' },
     { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis' }
   ],
   'UndergraduateStudent': [
     { uri: 'http://vivoweb.org/ontology/core#email', label: 'Email', validation: (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? null : 'Email inválido' },
     { uri: 'http://schema.org/image', label: 'URL Foto de Perfil (schema:image)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/status', label: 'Estado' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status', label: 'Estado' },
     { uri: 'http://vivoweb.org/ontology/core#thesisTitle', label: 'Título de Tesis de Grado' }
   ],
   'Project': [
-    { uri: 'http://example.org/resource/status', label: 'Estado' },
-    { uri: 'http://example.org/resource/grantNumber', label: 'Número de Subsidio' },
-    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Inicio (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
-    { uri: 'http://example.org/resource/endDate', label: 'Fecha de Fin (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status', label: 'Estado' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/grantNumber', label: 'Número de Subsidio' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/startDate', label: 'Fecha de Inicio (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/endDate', label: 'Fecha de Fin (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' }
   ],
   'Article': [
-    { uri: 'http://example.org/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
     { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' },
     { uri: 'https://dblp.org/rdf/schema#journal', label: 'Journal / Revista' }
   ],
   'Topic': [
-    { uri: 'http://example.org/resource/description', label: 'Descripción' }
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/description', label: 'Descripción' }
   ],
   'Thesis': [
     { uri: 'http://purl.org/ontology/bibo/degree', label: 'Grado Académico (bibo:degree)' },
@@ -70,16 +70,16 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   ],
   'DocumentDraft': [
     { uri: 'http://schema.org/url', label: 'URL Externa / Sitio (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/status', label: 'Estado (ej. En borrador, En revisión)' }
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status', label: 'Estado (ej. En borrador, En revisión)' }
   ],
   'AcademicArticle': [
     { uri: 'http://schema.org/url', label: 'URL Externa / Referencia (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/doi', label: 'DOI', validation: (val) => !val || /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(val) ? null : 'DOI inválido' },
     { uri: 'https://dblp.org/rdf/schema#year', label: 'Año (YYYY)', validation: (val) => !val || /^\d{4}$/.test(val) ? null : 'Año de 4 dígitos requerido' }
   ],
   'Folder': [
     { uri: 'http://schema.org/url', label: 'URL Carpeta Nube (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/description', label: 'Descripción / Proveedor' }
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/description', label: 'Descripción / Proveedor' }
   ],
   'ImageObject': [
     { uri: 'http://schema.org/url', label: 'URL Diagrama / Imagen (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' }
@@ -96,19 +96,19 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
     { uri: 'http://cientopolis.org/rfu/recurrenceType', label: 'Modalidad (periodica / puntual)' },
     { uri: 'http://cientopolis.org/rfu/frequency', label: 'Frecuencia (semanal / quincenal / mensual)' },
     { uri: 'http://cientopolis.org/rfu/dayOfWeek', label: 'Día de la Semana (rfu:dayOfWeek)' },
-    { uri: 'http://example.org/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/startDate', label: 'Fecha de Reunión (YYYY-MM-DD)', validation: (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val) ? null : 'Formato YYYY-MM-DD requerido' },
     { uri: 'http://cientopolis.org/rfu/meetingTime', label: 'Horario (HH:MM)' },
     { uri: 'http://cientopolis.org/rfu/location', label: 'Ubicación / Aula (rfu:location)' }
   ],
   'Conference': [
     { uri: 'http://schema.org/url', label: 'URL Sitio de Conferencia (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/submissionDeadlineMonth', label: 'Meses de Deadline (ej. Marzo, Septiembre)' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth', label: 'Meses de Deadline (ej. Marzo, Septiembre)' },
     { uri: 'http://purl.org/ontology/bibo/rank', label: 'Ranking CORE (ej. A*, A, B, C)' },
     { uri: 'http://purl.org/dc/terms/subject', label: 'Temáticas / Tópicos (dcterms:subject)' }
   ],
   'Journal': [
     { uri: 'http://schema.org/url', label: 'URL Sitio de Revista (schema:url)', validation: (val) => !val || /^https?:\/\/.+/i.test(val) ? null : 'Debe comenzar con http:// o https://' },
-    { uri: 'http://example.org/resource/submissionDeadlineMonth', label: 'Meses / Fechas de Envió (ej. Abierto todo el año / Mayo, Nov)' },
+    { uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth', label: 'Meses / Fechas de Envió (ej. Abierto todo el año / Mayo, Nov)' },
     { uri: 'http://purl.org/ontology/bibo/rank', label: 'Cuartil / Ranking (ej. Q1, Q2, Q3, Q4)' },
     { uri: 'http://purl.org/dc/terms/subject', label: 'Temáticas / Tópicos (dcterms:subject)' }
   ]
@@ -399,7 +399,7 @@ SELECT ?s ?p ?o WHERE {
         ?node rdf:type <${finalType}> .
         ?node rdfs:label ?label .
         OPTIONAL { ?node bibo:rank ?rank }
-        OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
+        OPTIONAL { ?node <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?deadlineMonth }
         OPTIONAL { ?node dcterms:subject ?subject }
         OPTIONAL { ?node schema:url ?url1 }
         OPTIONAL { ?node foaf:page ?url2 }
@@ -407,7 +407,7 @@ SELECT ?s ?p ?o WHERE {
         OPTIONAL { ?node foaf:depiction ?img2 }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
         BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
-        FILTER(STRSTARTS(STR(?node), "http://example.org/"))
+        FILTER(STRSTARTS(STR(?node), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?node), "http://example.org/"))
       } LIMIT 1000
     `;
 
@@ -464,7 +464,7 @@ SELECT ?s ?p ?o WHERE {
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
       PREFIX schema: <http://schema.org/>
@@ -493,7 +493,7 @@ SELECT ?s ?p ?o WHERE {
         }
         BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
         BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
-        FILTER(STRSTARTS(STR(?node), "http://example.org/"))
+        FILTER(STRSTARTS(STR(?node), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?node), "http://example.org/"))
       }
     `;
 
@@ -647,7 +647,7 @@ SELECT ?s ?p ?o WHERE {
     `;
     const canvasTriples = alreadyInCanvas
       ? ''
-      : `<${researcherUri}> rfu:inCanvasOf <${userUri}> ; <http://example.org/resource/posX> "150" ; <http://example.org/resource/posY> "150" .`;
+      : `<${researcherUri}> rfu:inCanvasOf <${userUri}> ; <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posX> "150" ; <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posY> "150" .`;
     const insertQuery = `
       PREFIX rfu: <http://cientopolis.org/rfu/>
       INSERT DATA {
@@ -700,7 +700,7 @@ SELECT ?s ?p ?o WHERE {
     if (!user || !label.trim() || !uriSuffix.trim()) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const cleanSuffix = uriSuffix.trim().replace(/\s+/g, '');
-    const nodeUri = `http://example.org/resource/${cleanSuffix}`;
+    const nodeUri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${cleanSuffix}`;
     
     if (nodes.some(n => n.uri === nodeUri)) {
       alert("La URI del nodo ya existe. Por favor, elige otro sufijo.");
@@ -714,7 +714,7 @@ SELECT ?s ?p ?o WHERE {
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
       INSERT DATA {
@@ -752,8 +752,8 @@ SELECT ?s ?p ?o WHERE {
         ?from ?predicate ?to .
         { ?from rfu:createdBy <${userUri}> } UNION { ?from rfu:inCanvasOf <${userUri}> }
         { ?to rfu:createdBy <${userUri}> } UNION { ?to rfu:inCanvasOf <${userUri}> }
-        FILTER(isURI(?to) && STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
-        FILTER(?predicate != <http://example.org/resource/posX> && ?predicate != <http://example.org/resource/posY> && ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && ?predicate != <http://www.w3.org/2000/01/rdf-schema#label> && ?predicate != <http://example.org/resource/status>)
+        FILTER(isURI(?to) && (STRSTARTS(STR(?from), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?from), "http://example.org/")) && (STRSTARTS(STR(?to), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?to), "http://example.org/")))
+        FILTER(?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posX> && ?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posY> && ?predicate != <http://example.org/resource/posX> && ?predicate != <http://example.org/resource/posY> && ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && ?predicate != <http://www.w3.org/2000/01/rdf-schema#label> && ?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status> && ?predicate != <http://example.org/resource/status>)
       }
     `;
 
@@ -871,7 +871,7 @@ SELECT ?s ?p ?o WHERE {
         { ?prop a <http://www.w3.org/2002/07/owl#DatatypeProperty> . }
         UNION
         { ?s ?prop ?o . FILTER(isLiteral(?o)) }
-        FILTER(?prop != <http://example.org/resource/posX> && ?prop != <http://example.org/resource/posY> && ?prop != <http://www.w3.org/2000/01/rdf-schema#label> && ?prop != <http://example.org/resource/status>)
+        FILTER(?prop != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posX> && ?prop != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posY> && ?prop != <http://example.org/resource/posX> && ?prop != <http://example.org/resource/posY> && ?prop != <http://www.w3.org/2000/01/rdf-schema#label> && ?prop != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status> && ?prop != <http://example.org/resource/status>)
       }
     `;
     try {
@@ -988,7 +988,7 @@ SELECT ?s ?p ?o WHERE {
       if (data.success) {
         // Update local state label and photoUrl
         const newLabel = nodeDetails['http://www.w3.org/2000/01/rdf-schema#label'] || selectedNode.label;
-        const newStatus = nodeDetails['http://example.org/resource/status'] || selectedNode.status;
+        const newStatus = nodeDetails['http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status'] || nodeDetails['http://example.org/resource/status'] || selectedNode.status;
         const newPhotoUrl = (nodeDetails['http://schema.org/image'] || '').trim() || undefined;
         setNodes(nodes.map(n => n.uri === selectedNode.uri ? { ...n, label: newLabel, status: newStatus, photoUrl: newPhotoUrl } : n));
         setNodePhotos(prev => {
@@ -1047,7 +1047,7 @@ SELECT ?s ?p ?o WHERE {
       PREFIX dblp: <https://dblp.org/rdf/schema#>
       PREFIX dct: <http://purl.org/dc/terms/>
       PREFIX cso: <http://cso.kmi.open.ac.uk/schema/cso#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
       INSERT DATA {
@@ -1154,7 +1154,7 @@ SELECT ?s ?p ?o WHERE {
       if (node) {
         // Persist new coordinates in GraphDB
         const updateQuery = `
-          PREFIX ex: <http://example.org/resource/>
+          PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
           DELETE {
             <${node.uri}> ex:posX ?x ; ex:posY ?y .
           } INSERT {
@@ -1224,7 +1224,7 @@ SELECT ?s ?p ?o WHERE {
     }
 
     const insertQuery = `
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
       
       INSERT DATA {
@@ -1262,6 +1262,7 @@ SELECT ?s ?p ?o WHERE {
     let updateTriples = `
       DELETE WHERE { <${editingCatalogNode.uri}> rdfs:label ?o . };
       DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> ?o . };
+      DELETE WHERE { <${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?o . };
       DELETE WHERE { <${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> ?o . };
       DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> ?o . };
       DELETE WHERE { <${editingCatalogNode.uri}> <http://schema.org/url> ?o . };
@@ -1277,7 +1278,7 @@ SELECT ?s ?p ?o WHERE {
         updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
       }
       if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
-        updateTriples += `\n<${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
       }
     }
     if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
@@ -1312,7 +1313,7 @@ SELECT ?s ?p ?o WHERE {
     if (!user) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     
-    const uri = `http://example.org/resource/${newNodeData.uriSuffix.trim()}`;
+    const uri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${newNodeData.uriSuffix.trim()}`;
 
     // If triggered via quick-connect, place child node offset from parent
     let x: number;
@@ -1330,10 +1331,10 @@ SELECT ?s ?p ?o WHERE {
     let extraTriples = '';
     if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#PhD') {
       finalType = 'http://purl.org/ontology/bibo/Thesis';
-      extraTriples = `<${uri}> <http://example.org/resource/thesisType> "PhD Thesis" .`;
+      extraTriples = `<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "PhD Thesis" .`;
     } else if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#Master') {
       finalType = 'http://purl.org/ontology/bibo/Thesis';
-      extraTriples = `<${uri}> <http://example.org/resource/thesisType> "Magister" .`;
+      extraTriples = `<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "Magister" .`;
     }
 
     if (newNodeData.externalUrl && newNodeData.externalUrl.trim()) {
@@ -1349,7 +1350,7 @@ SELECT ?s ?p ?o WHERE {
         extraTriples += `\n<${uri}> <http://purl.org/ontology/bibo/rank> "${newNodeData.rank.trim()}" .`;
       }
       if (newNodeData.deadlineMonth && newNodeData.deadlineMonth.trim()) {
-        extraTriples += `\n<${uri}> <http://example.org/resource/submissionDeadlineMonth> "${newNodeData.deadlineMonth.trim()}" .`;
+        extraTriples += `\n<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> "${newNodeData.deadlineMonth.trim()}" .`;
       }
       if (newNodeData.subject && newNodeData.subject.trim()) {
         extraTriples += `\n<${uri}> <http://purl.org/dc/terms/subject> "${newNodeData.subject.trim()}" .`;
@@ -1359,7 +1360,7 @@ SELECT ?s ?p ?o WHERE {
     const insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       PREFIX rfu: <http://cientopolis.org/rfu/>
       PREFIX schema: <http://schema.org/>
       
@@ -1441,7 +1442,7 @@ SELECT ?s ?p ?o WHERE {
       const midY = Math.round((personNode.y + projectNode.y) / 2);
 
       const roleId = Math.random().toString(36).substring(2, 9);
-      const roleUri = `http://example.org/resource/${roleIdPrefix}${roleId}`;
+      const roleUri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${roleIdPrefix}${roleId}`;
       const userUri = user ? `http://cientopolis.org/rfu/user/${user.uid}` : 'http://cientopolis.org/rfu/user/guest';
 
       insertQuery = `
@@ -1449,7 +1450,7 @@ SELECT ?s ?p ?o WHERE {
         PREFIX obo: <http://purl.obolibrary.org/obo/>
         PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX ex: <http://example.org/resource/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
         PREFIX rfu: <http://cientopolis.org/rfu/>
 
         INSERT DATA {
@@ -1515,7 +1516,7 @@ SELECT ?s ?p ?o WHERE {
       // Non-admin user: Remove node ONLY from current user's canvas and clear their user-specific canvas triples
       query = `
         PREFIX rfu: <http://cientopolis.org/rfu/>
-        PREFIX ex: <http://example.org/resource/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
         DELETE DATA {
           <${nodeToDelete.uri}> rfu:inCanvasOf <${userUri}> .
@@ -1590,7 +1591,7 @@ SELECT ?s ?p ?o WHERE {
     if (!sourceNode || !targetNode) return;
 
     // Ontological Predicate Suggestion
-    let suggestedPredicate = 'http://example.org/resource/relatedTo';
+    let suggestedPredicate = 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/relatedTo';
     
     if (sourceNode.type.includes('FacultyMember') && (targetNode.type.includes('GraduateStudent') || targetNode.type.includes('UndergraduateStudent'))) {
       suggestedPredicate = 'http://vivoweb.org/ontology/core#advisor';
@@ -1630,6 +1631,9 @@ SELECT ?s ?p ?o WHERE {
   };
 
   const getCleanLabel = (uri: string) => {
+    if (uri.startsWith('http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/')) {
+      return uri.replace('http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/', 'ex:');
+    }
     if (uri.startsWith('http://example.org/resource/')) {
       return uri.replace('http://example.org/resource/', 'ex:');
     }
@@ -1992,6 +1996,14 @@ SELECT ?s ?p ?o WHERE {
           fetchCSOTopics={fetchCSOTopics}
           csoTopicsList={csoTopicsList}
           isFetchingCSO={isFetchingCSO}
+          onDatabaseReset={() => {
+            setNodes([]);
+            setConnections([]);
+            setNodePhotos({});
+            setAssociatedResearcher(null);
+            setCatalogResearchers([]);
+            setGlobalCatalogNodes([]);
+          }}
         />
       ) : currentView === 'meetings' ? (
         <MeetingsPanel
@@ -2847,7 +2859,7 @@ SELECT ?s ?p ?o WHERE {
                           .filter(([uri]) => {
                             // Ocultar labels, status predefinidos, posiciones (ex:posX / ex:posY), o propiedades sugeridas fijas
                             const isLabel = uri === 'http://www.w3.org/2000/01/rdf-schema#label';
-                            const isPosition = uri === 'http://example.org/resource/posX' || uri === 'http://example.org/resource/posY';
+                            const isPosition = uri === 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posX' || uri === 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posY' || uri === 'http://example.org/resource/posX' || uri === 'http://example.org/resource/posY';
                             const isPredefined = getPredefinedProperties(selectedNode.type).some(p => p.uri === uri);
                             return !isLabel && !isPosition && !isPredefined;
                           })
@@ -2917,9 +2929,9 @@ SELECT ?s ?p ?o WHERE {
                                   if (newPropURI.trim()) {
                                     let resolvedURI = newPropURI.trim();
                                     if (resolvedURI.startsWith('ex:')) {
-                                      resolvedURI = resolvedURI.replace('ex:', 'http://example.org/resource/');
+                                      resolvedURI = resolvedURI.replace('ex:', 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/');
                                     } else if (!resolvedURI.startsWith('http://') && !resolvedURI.startsWith('https://')) {
-                                      resolvedURI = `http://example.org/resource/${resolvedURI}`;
+                                      resolvedURI = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${resolvedURI}`;
                                     }
                                     setNodeDetails(prev => ({ ...prev, [resolvedURI]: '' }));
                                     setNewPropURI('');
@@ -3024,7 +3036,7 @@ SELECT ?s ?p ?o WHERE {
                         <option value="http://cientopolis.org/rfu/researchedIn">rfu:researchedIn — Investigado en</option>
                       </optgroup>
                       <optgroup label="Genérico">
-                        <option value="http://example.org/resource/relatedTo">ex:relatedTo — Relacionado con</option>
+                        <option value="http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/relatedTo">ex:relatedTo — Relacionado con</option>
                       </optgroup>
                     </select>
                     {editingPredicate !== selectedConnection.predicate && (

@@ -32,6 +32,7 @@ interface AdminCatalogPanelProps {
   fetchCSOTopics: (search: string) => Promise<void>;
   csoTopicsList: { uri: string; label: string }[];
   isFetchingCSO: boolean;
+  onDatabaseReset?: () => void;
 }
 
 const CATEGORIES = [
@@ -51,7 +52,8 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
   STATIC_CSO_TOPICS,
   fetchCSOTopics,
   csoTopicsList,
-  isFetchingCSO
+  isFetchingCSO,
+  onDatabaseReset
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('http://purl.org/ontology/bibo/Conference');
   const [items, setItems] = useState<CatalogItem[]>([]);
@@ -59,6 +61,10 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showResetDbModal, setShowResetDbModal] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [isResettingDb, setIsResettingDb] = useState(false);
+  const [resetSuccessBanner, setResetSuccessBanner] = useState<string | null>(null);
 
   // Form state for creating new node
   const [createForm, setCreateForm] = useState({
@@ -154,7 +160,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       const insertTriples: string[] = [];
 
       chosen.forEach(m => {
-        const targetUri = m.uri || `http://example.org/resource/${m.uriSuffix || m.slug}`;
+        const targetUri = m.uri || `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${m.uriSuffix || m.slug}`;
         const targetType = typeOverrides[m.slug] || m.vivoType || 'http://vivoweb.org/ontology/core#FacultyMember';
         const escName = (m.name || '').replace(/"/g, '\\"');
 
@@ -197,7 +203,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         PREFIX vivo: <http://vivoweb.org/ontology/core#>
         PREFIX schema: <http://schema.org/>
         PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX ex: <http://example.org/resource/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
         ${deleteBlocks.join('\n')}
       `;
 
@@ -207,7 +213,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         PREFIX vivo: <http://vivoweb.org/ontology/core#>
         PREFIX schema: <http://schema.org/>
         PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX ex: <http://example.org/resource/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
         INSERT DATA {
           ${insertTriples.join('\n          ')}
         }
@@ -257,7 +263,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         ?node rdf:type <${typeUri}> .
         ?node rdfs:label ?label .
         OPTIONAL { ?node bibo:rank ?rank }
-        OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
+        OPTIONAL { ?node <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?deadlineMonth }
         OPTIONAL { ?node dcterms:subject ?subject }
         OPTIONAL { ?node schema:url ?url1 }
         OPTIONAL { ?node foaf:page ?url2 }
@@ -329,7 +335,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       PREFIX dcterms: <http://purl.org/dc/terms/>
       PREFIX schema: <http://schema.org/>
       PREFIX vivo: <http://vivoweb.org/ontology/core#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
       DELETE WHERE { <${uri}> rdfs:label ?l . };
       DELETE WHERE { <${uri}> bibo:rank ?r . };
@@ -346,7 +352,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       PREFIX dcterms: <http://purl.org/dc/terms/>
       PREFIX schema: <http://schema.org/>
       PREFIX vivo: <http://vivoweb.org/ontology/core#>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
       INSERT DATA {
         <${uri}> rdfs:label "${label.replace(/"/g, '\\"')}" .
@@ -421,7 +427,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
     }
 
     const cleanSuffix = createForm.uriSuffix.trim().replace(/\s+/g, '');
-    const nodeUri = `http://example.org/resource/${cleanSuffix}`;
+    const nodeUri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${cleanSuffix}`;
 
     let insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -429,7 +435,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       PREFIX bibo: <http://purl.org/ontology/bibo/>
       PREFIX dcterms: <http://purl.org/dc/terms/>
       PREFIX schema: <http://schema.org/>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
       INSERT DATA {
         <${nodeUri}> rdf:type <${activeCategory}> .
@@ -468,6 +474,41 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
     }
   };
 
+  const handleResetDatabase = async () => {
+    if (resetConfirmText.trim().toUpperCase() !== 'BLANQUEAR') {
+      alert('Por favor escribí la palabra BLANQUEAR para confirmar el blanqueo de la base de datos.');
+      return;
+    }
+
+    setIsResettingDb(true);
+    setResetSuccessBanner(null);
+
+    try {
+      const res = await fetchWithAuth('/api/admin/reset-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al blanquear la base de datos');
+      }
+
+      setShowResetDbModal(false);
+      setResetConfirmText('');
+      setExistingPersonUris(new Set());
+      setResetSuccessBanner(data.message || '✅ Base de datos blanqueada correctamente. Las ontologías VIVO, DBLP y CSO permanecen intactas.');
+      fetchCategoryItems(activeCategory);
+      if (onDatabaseReset) {
+        onDatabaseReset();
+      }
+    } catch (e: any) {
+      console.error('Error al blanquear la base de datos:', e);
+      alert(e.message || 'Ocurrió un error al blanquear la base de datos en GraphDB.');
+    } finally {
+      setIsResettingDb(false);
+    }
+  };
+
   const filteredItems = items.filter(item => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
@@ -500,6 +541,26 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className="btn"
+            onClick={() => {
+              setResetConfirmText('');
+              setShowResetDbModal(true);
+            }}
+            style={{
+              padding: '8px 16px',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(210, 15, 57, 0.1)',
+              color: '#d20f39',
+              border: '1px solid rgba(210, 15, 57, 0.35)',
+              fontWeight: 700
+            }}
+          >
+            🧹 Blanquear Base de Datos
+          </button>
+          <button
+            className="btn"
             onClick={() => openLifiaImportModal(false)}
             style={{
               padding: '8px 16px',
@@ -524,6 +585,30 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
           </button>
         </div>
       </div>
+
+      {resetSuccessBanner && (
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: '10px',
+          background: 'rgba(64, 160, 43, 0.14)',
+          color: '#40a02b',
+          border: '1px solid rgba(64, 160, 43, 0.35)',
+          fontSize: '0.86rem',
+          fontWeight: 600,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>{resetSuccessBanner}</span>
+          <button
+            className="btn btn-sm"
+            onClick={() => setResetSuccessBanner(null)}
+            style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Categories Tabs */}
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
@@ -1188,6 +1273,70 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                     : `🚀 Importar / Sincronizar Seleccionados (${selectedSlugs.size})`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Blanquear / Resetear Base de Datos */}
+      {showResetDbModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.68)', display: 'flex', justifyContent: 'center',
+          alignItems: 'center', zIndex: 800, backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--bg-mantle)', padding: '28px', borderRadius: '18px',
+            width: '480px', maxWidth: '92vw', display: 'flex', flexDirection: 'column', gap: '16px',
+            border: '2px solid #d20f39', boxShadow: '0 20px 50px rgba(0,0,0,0.4)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#d20f39', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ⚠️ Blanquear / Resetear Base de Datos
+              </h3>
+              <button className="btn btn-sm" onClick={() => setShowResetDbModal(false)} disabled={isResettingDb}>✕</button>
+            </div>
+
+            <div style={{
+              padding: '12px 14px', borderRadius: '10px',
+              background: 'rgba(210, 15, 57, 0.08)', border: '1px solid rgba(210, 15, 57, 0.28)',
+              fontSize: '0.84rem', color: 'var(--text-main)', lineHeight: 1.5
+            }}>
+              Esta acción eliminará <strong>todos los recursos, nodos del catálogo, personas importadas, lienzos de usuarios, reuniones, bitácoras y tareas Pomodoro</strong> de GraphDB.<br /><br />
+              ✅ <strong>Las ontologías base (VIVO, DBLP y CSO) se conservarán intactas</strong> para que puedas volver a cargar recursos inmediatamente con la URI base <code>http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/</code>.
+            </div>
+
+            <div className="form-group">
+              <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                Para confirmar, escribí <strong>BLANQUEAR</strong> en el siguiente campo:
+              </label>
+              <input
+                type="text"
+                placeholder="BLANQUEAR"
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                disabled={isResettingDb}
+                style={{ fontSize: '0.9rem', padding: '8px 12px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button className="btn" onClick={() => setShowResetDbModal(false)} disabled={isResettingDb}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={resetConfirmText.trim().toUpperCase() !== 'BLANQUEAR' || isResettingDb}
+                onClick={handleResetDatabase}
+                style={{
+                  background: '#d20f39',
+                  borderColor: '#d20f39',
+                  color: '#fff',
+                  opacity: resetConfirmText.trim().toUpperCase() !== 'BLANQUEAR' || isResettingDb ? 0.5 : 1
+                }}
+              >
+                {isResettingDb ? '⏳ Blanqueando Base de Datos...' : '🧹 Confirmar Blanqueo de Base'}
+              </button>
             </div>
           </div>
         </div>

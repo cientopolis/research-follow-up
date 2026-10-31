@@ -111,7 +111,7 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
       PREFIX vivo: <http://vivoweb.org/ontology/core#>
       PREFIX rfu: <http://cientopolis.org/rfu/>
       PREFIX schema: <http://schema.org/>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
       SELECT ?meeting ?label ?recurrenceType ?frequency ?dayOfWeek ?date ?time ?meetingUrl ?minutesUrl ?location ?posX ?posY ?participant ?session ?sDate ?sNotes ?sAttendee WHERE {
         ?meeting rdf:type vivo:Meeting .
@@ -278,7 +278,7 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
 
     const userUri = `http://cientopolis.org/rfu/user/${userUid}`;
     const cleanSuffix = (formData.uriSuffix.trim() || formData.label.trim().replace(/[^a-zA-Z0-9_-]/g, '_')).replace(/\s+/g, '_');
-    const meetingUri = editingMeetingUri || `http://example.org/resource/Meeting_${cleanSuffix}`;
+    const meetingUri = editingMeetingUri || `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/Meeting_${cleanSuffix}`;
 
     const escapedLabel = formData.label.trim().replace(/"/g, '\\"');
     const existingItem = meetings.find(m => m.uri === meetingUri);
@@ -291,7 +291,7 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
       PREFIX vivo: <http://vivoweb.org/ontology/core#>
       PREFIX rfu: <http://cientopolis.org/rfu/>
       PREFIX schema: <http://schema.org/>
-      PREFIX ex: <http://example.org/resource/>
+      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
     `;
 
     if (editingMeetingUri) {

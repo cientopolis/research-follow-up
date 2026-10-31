@@ -19,9 +19,10 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
   - [3.2 Crear una tarea en GraphDB](#32-crear-una-tarea-en-graphdb)
   - [3.3 Finalizar/Completar una tarea](#33-finalizarcompletar-una-tarea)
   - [3.4 Registrar realización de Pomodoro](#34-registrar-realización-de-pomodoro)
-- [4. Catálogo Compartido y Sincronización desde Memorias@LIFIA](#4-catálogo-compartido-y-sincronización-desde-memoriaslifia)
+- [4. Catálogo Compartido, Sincronización LIFIA y Blanqueo de Base](#4-catálogo-compartido-sincronización-lifia-y-blanqueo-de-base)
   - [4.1 Consultar entidades del catálogo por categoría](#41-consultar-entidades-del-catálogo-por-categoría)
   - [4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA](#42-importación--sincronización-masiva-de-personas-desde-memoriaslifia)
+  - [4.3 Blanqueo / Reset de la Base de Datos (conservando ontologías)](#43-blanqueo--reset-de-la-base-de-datos-conservando-ontologías)
 - [5. Agenda de Reuniones y Bitácora de Encuentros (`MeetingsPanel.tsx`)](#5-agenda-de-reuniones-y-bitácora-de-encuentros-meetingspaneltsx)
 
 ---
@@ -29,13 +30,13 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
 ## 1. Consultas del Canvas y Nodos
 
 ### 1.1 Obtener todos los nodos
-Obtiene todos los recursos del grafo que se originan bajo `http://example.org/` junto con su tipo, etiqueta (nombre), coordenadas cartesianas (posición en el canvas), estado y tipo de tesis si aplica.
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L126)
+Obtiene todos los recursos del grafo que se originan bajo `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/` (con soporte retrocompatible para `http://example.org/`) junto con su tipo, etiqueta (nombre), coordenadas cartesianas (posición en el canvas), estado y tipo de tesis si aplica.
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L461)
 *   **Query**:
     ```sparql
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    PREFIX ex: <http://example.org/resource/>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
     SELECT DISTINCT ?node ?label ?type ?x ?y ?status ?thesisType ?mindmapContent ?externalUrl ?photoUrl WHERE {
       ?node rdf:type ?type .
@@ -52,7 +53,7 @@ Obtiene todos los recursos del grafo que se originan bajo `http://example.org/` 
       OPTIONAL { ?node foaf:depiction ?img2 }
       BIND(COALESCE(?url1, ?url2) AS ?externalUrl)
       BIND(COALESCE(?img1, ?img2) AS ?photoUrl)
-      FILTER(STRSTARTS(STR(?node), "http://example.org/"))
+      FILTER(STRSTARTS(STR(?node), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?node), "http://example.org/"))
     }
     ```
 
@@ -66,23 +67,23 @@ Extrae las aristas semánticas dirigidas entre nodos del canvas (creados por el 
       ?from ?predicate ?to .
       { ?from rfu:createdBy <${userUri}> } UNION { ?from rfu:inCanvasOf <${userUri}> }
       { ?to rfu:createdBy <${userUri}> } UNION { ?to rfu:inCanvasOf <${userUri}> }
-      FILTER(isURI(?to) && STRSTARTS(STR(?from), "http://example.org/") && STRSTARTS(STR(?to), "http://example.org/"))
-      FILTER(?predicate != <http://example.org/resource/posX> && 
-             ?predicate != <http://example.org/resource/posY> && 
+      FILTER(isURI(?to) && (STRSTARTS(STR(?from), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?from), "http://example.org/")) && (STRSTARTS(STR(?to), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/") || STRSTARTS(STR(?to), "http://example.org/")))
+      FILTER(?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posX> && 
+             ?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/posY> && 
              ?predicate != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> && 
              ?predicate != <http://www.w3.org/2000/01/rdf-schema#label> && 
-             ?predicate != <http://example.org/resource/status>)
+             ?predicate != <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/status>)
     }
     ```
 
 ### 1.3 Crear un nuevo nodo
-Inserta en el triplestore los metadatos y coordenadas de un nuevo nodo.
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L439)
+Inserta en el triplestore los metadatos y coordenadas de un nuevo nodo bajo `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/`.
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L1310)
 *   **Query**:
     ```sparql
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    PREFIX ex: <http://example.org/resource/>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
     INSERT DATA {
       <${uri}> rdf:type <${type}> ;
@@ -97,10 +98,10 @@ Inserta en el triplestore los metadatos y coordenadas de un nuevo nodo.
 
 ### 1.4 Actualizar la posición de un nodo
 Actualiza las coordenadas de un nodo en el canvas tras una acción de arrastrar y soltar (Drag & Drop).
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L539)
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L1155)
 *   **Query**:
     ```sparql
-    PREFIX ex: <http://example.org/resource/>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
     DELETE {
       <${draggingNodeId}> ex:posX ?oldX ;
@@ -283,11 +284,11 @@ Registra una sesión de intervalo de tiempo de enfoque (`rfu:PomodoroSession`) c
 
 ---
 
-## 4. Catálogo Compartido y Sincronización desde Memorias@LIFIA
+## 4. Catálogo Compartido, Sincronización LIFIA y Blanqueo de Base
 
 ### 4.1 Consultar entidades del catálogo por categoría
 Obtiene todos los recursos globales de una categoría (`vivo:FacultyMember`, `vivo:GraduateStudent`, `vivo:UndergraduateStudent`, `bibo:Conference`, `bibo:Journal`, etc.) incluyendo foto (`schema:image`), correo (`vivo:email`), enlace oficial (`schema:url`) y tópicos (`dcterms:subject`), sin explosión cartesiana de `rdf:type`.
-*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L240)
+*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L250)
 *   **Query**:
     ```sparql
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -302,7 +303,7 @@ Obtiene todos los recursos globales de una categoría (`vivo:FacultyMember`, `vi
       ?node rdf:type <${typeUri}> .
       ?node rdfs:label ?label .
       OPTIONAL { ?node bibo:rank ?rank }
-      OPTIONAL { ?node <http://example.org/resource/submissionDeadlineMonth> ?deadlineMonth }
+      OPTIONAL { ?node <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?deadlineMonth }
       OPTIONAL { ?node dcterms:subject ?subject }
       OPTIONAL { ?node schema:url ?url1 }
       OPTIONAL { ?node foaf:page ?url2 }
@@ -315,8 +316,8 @@ Obtiene todos los recursos globales de una categoría (`vivo:FacultyMember`, `vi
     ```
 
 ### 4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA
-Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://memorias.lifia.info.unlp.edu.ar/members`, almacenando únicamente URLs externas (`schema:image`, `schema:url`).
-*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L144)
+Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://memorias.lifia.info.unlp.edu.ar/members` bajo la URI base `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/`, almacenando únicamente URLs externas (`schema:image`, `schema:url`).
+*   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L149)
 *   **Queries**:
     ```sparql
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -324,7 +325,7 @@ Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://m
     PREFIX vivo: <http://vivoweb.org/ontology/core#>
     PREFIX schema: <http://schema.org/>
     PREFIX dcterms: <http://purl.org/dc/terms/>
-    PREFIX ex: <http://example.org/resource/>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
     DELETE WHERE { <${targetUri}> rdf:type vivo:FacultyMember . };
     DELETE WHERE { <${targetUri}> rdf:type vivo:GraduateStudent . };
@@ -345,6 +346,30 @@ Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://m
                      vivo:email "${email}" ;
                      ex:status "${position}" ;
                      dcterms:subject "${tag}" .
+    }
+    ```
+
+### 4.3 Blanqueo / Reset de la Base de Datos (conservando ontologías)
+Elimina todas las tripletas de recursos, personas, lienzos de usuario, reuniones y tareas (`http://cientopolis.lifia.info.unlp.edu.ar/rfu/`, `http://cientopolis.org/rfu/`, `http://example.org/`) preservando las ontologías base (`VIVO`, `DBLP`, `CSO`).
+*   **Archivo origen**: [server.js](file:///Users/dtorres/development/research-follow-up/server.js#L392) (`POST /api/admin/reset-db`)
+*   **Query**:
+    ```sparql
+    DELETE { ?s ?p ?o }
+    WHERE {
+      ?s ?p ?o .
+      FILTER(
+        STRSTARTS(STR(?s), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+        STRSTARTS(STR(?s), "http://cientopolis.org/rfu/") ||
+        STRSTARTS(STR(?s), "http://example.org/") ||
+        STRSTARTS(STR(?p), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+        STRSTARTS(STR(?p), "http://cientopolis.org/rfu/") ||
+        STRSTARTS(STR(?p), "http://example.org/") ||
+        (isURI(?o) && (
+          STRSTARTS(STR(?o), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+          STRSTARTS(STR(?o), "http://cientopolis.org/rfu/") ||
+          STRSTARTS(STR(?o), "http://example.org/")
+        ))
+      )
     }
     ```
 

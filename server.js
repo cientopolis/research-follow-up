@@ -226,7 +226,7 @@ app.get('/api/lifia-members', checkAuth, async (req, res) => {
         membersMap.set(slug, {
           slug,
           uriSuffix,
-          uri: `http://example.org/resource/${uriSuffix}`,
+          uri: `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${uriSuffix}`,
           name: rawName,
           position: position || 'Investigador',
           vivoType: mapPositionToVivoType(position),
@@ -385,6 +385,65 @@ app.post('/api/admin/users/:uid/role', checkAuth, checkSuperAdmin, async (req, r
   } catch (error) {
     console.error(`[Admin API] Error al actualizar rol de usuario ${uid}:`, error);
     return res.status(500).json({ error: 'Error al actualizar rol', details: error.message });
+  }
+});
+
+// 5. Blanquear / Resetear la Base de Datos de GraphDB (elimina recursos de aplicación y usuarios conservando ontologías VIVO, DBLP y CSO)
+app.post('/api/admin/reset-db', checkAuth, checkSuperAdmin, async (req, res) => {
+  const resetQuery = `
+    DELETE { ?s ?p ?o }
+    WHERE {
+      ?s ?p ?o .
+      FILTER(
+        STRSTARTS(STR(?s), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+        STRSTARTS(STR(?s), "http://cientopolis.org/rfu/") ||
+        STRSTARTS(STR(?s), "http://example.org/") ||
+        STRSTARTS(STR(?p), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+        STRSTARTS(STR(?p), "http://cientopolis.org/rfu/") ||
+        STRSTARTS(STR(?p), "http://example.org/") ||
+        (isURI(?o) && (
+          STRSTARTS(STR(?o), "http://cientopolis.lifia.info.unlp.edu.ar/rfu/") ||
+          STRSTARTS(STR(?o), "http://cientopolis.org/rfu/") ||
+          STRSTARTS(STR(?o), "http://example.org/")
+        ))
+      )
+    }
+  `;
+
+  try {
+    const endpoint = `${GRAPHDB_URL}/repositories/${REPO}/statements`;
+    const headers = getGraphDBHeaders('application/x-www-form-urlencoded');
+    const body = new URLSearchParams({ update: resetQuery }).toString();
+
+    console.log(`[Admin API] Ejecutando blanqueo/reset de base de datos en ${endpoint}`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Admin API] Error en GraphDB al blanquear base: ${response.status} - ${errorText}`);
+      return res.status(response.status).json({
+        error: 'Error al blanquear la base de datos en GraphDB',
+        details: errorText
+      });
+    }
+
+    // Invalidar caché de miembros de LIFIA por si hay recargas inmediatas
+    lifiaMembersCache = { data: null, fetchedAt: 0 };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Base de datos blanqueada correctamente. Se conservaron las ontologías base (VIVO, DBLP, CSO).'
+    });
+  } catch (error) {
+    console.error('[Admin API] Error al blanquear la base de datos:', error);
+    return res.status(500).json({
+      error: 'Error al conectar con GraphDB para blanquear la base',
+      details: error.message
+    });
   }
 });
 

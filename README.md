@@ -82,6 +82,10 @@ Ejecuta el script de carga en Python para subir los esquemas `VIVO`, `DBLP` y `C
 python3 import_ontologies.py
 ```
 *Si las credenciales y el servidor están corriendo, verás el mensaje de conexión exitosa e importación correcta (HTTP 204).*
+> 💡 **Blanqueo / Reset desde línea de comandos**: Si necesitas limpiar completamente el repositorio en GraphDB y volver a importar las ontologías desde cero, ejecuta:
+> ```bash
+> python3 import_ontologies.py --reset
+> ```
 
 ---
 
@@ -127,7 +131,7 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Validadores y Prevención de Errores**: Filtros RegExp en tiempo real y al guardar para formatos de correo electrónico, números enteros de año, fechas YYYY-MM-DD y DOIs normalizados.
     *   **Persistencia Semántica Limpia**: Operación transaccional `DELETE/INSERT` que actualiza los triples modificados y depura propiedades vacías en el triplestore.
 *   **Integración de Tesis Semánticas (PhD Thesis & Magister)**:
-    *   **Modelado Semántico**: Ambos tipos de tesis se asocian bajo la clase estándar de VIVO `bibo:Thesis` y se diferencian semánticamente en el triplestore mediante el atributo `<http://example.org/resource/thesisType>` con valor `"PhD Thesis"` o `"Magister"`.
+    *   **Modelado Semántico**: Ambos tipos de tesis se asocian bajo la clase estándar de VIVO `bibo:Thesis` y se diferencian semánticamente en el triplestore mediante el atributo `<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType>` con valor `"PhD Thesis"` o `"Magister"`.
     *   **Estilos Diferenciados**:
         *   Tesis Doctoral (`#nodeTesisDoctoral`): Tarjeta visual con borde naranja melocotón (`#fe640b`).
         *   Tesis de Maestría (`#nodeTesisMaestria`): Tarjeta visual con borde amarillo ámbar (`#df8e1d`).
@@ -142,9 +146,10 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   **Vinculación con Dirigidos (`rfu:hasParticipant`)**: Selección múltiple de tesistas de grado (`vivo:UndergraduateStudent`), tesistas de posgrado (`vivo:GraduateStudent`) e investigadores (`vivo:FacultyMember`) sincronizada directamente con los nodos y relaciones del lienzo.
     *   **Bitácora de Sesiones y Asistencia (`rfu:MeetingSession`)**: Historial por cada encuentro con registro de fecha, notas/minutas de avance y control de asistencia por participante (`rfu:attendedBy`), además de enlaces directos a videollamadas (Meet/Zoom) y documentos compartidos.
 *   **Panel de Gestión del Catálogo Compartido (`👑 Gestión del Catálogo - Admin`)**:
-    *   Vista administrativa exclusiva para usuarios `SuperAdmin` que agrupa en pestañas las entidades globales del sistema (*Conferencias*, *Revistas*, *Tópicos CSO*, *Investigadores*, *Tesistas de Posgrado*, *Tesistas de Grado*, *Datasets*, *Archivos* y *Proyectos*), permitiendo búsqueda en tiempo real, alta, edición in-situ y eliminación controlada en GraphDB.
+    *   Vista administrativa exclusiva para usuarios `SuperAdmin` que agrupa en pestañas las entidades globales del sistema (*Conferencias*, *Revistas*, *Tópicos CSO*, *Investigadores*, *Tesistas de Posgrado*, *Tesistas de Grado*, *Datasets*, *Archivos* y *Proyectos*), permitiendo búsqueda en tiempo real, alta, edición in-situ y eliminación controlada en GraphDB bajo el espacio de nombres institucional `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/`.
     *   **Atributos específicos por categoría**: Los campos de **Ranking / Cuartil** (`bibo:rank`) y **Mes de Deadline** (`ex:submissionDeadlineMonth`) se habilitan únicamente para *Conferencias* y *Revistas*, mientras que para *Investigadores* y *Tesistas* se gestionan correo electrónico (`vivo:email`), foto de perfil (`schema:image`), enlace al perfil institucional (`schema:url`) y temáticas (`dcterms:subject`).
-    *   **Carga Automática desde Memorias@LIFIA (`🏛️ Carga Automática desde Memorias@LIFIA`)**: Herramienta para SuperAdmin que consulta el directorio oficial `https://memorias.lifia.info.unlp.edu.ar/members` (`GET /api/lifia-members`), detecta automáticamente el rol ontológico (`vivo:FacultyMember`, `vivo:GraduateStudent` o `vivo:UndergraduateStudent`), y sincroniza en lote nombres, cargos, correos, líneas de investigación y enlaces externos a sus fotos de perfil en GraphDB.
+    *   **Carga Automática desde Memorias@LIFIA (`🏛️ Carga Automática desde Memorias@LIFIA`)**: Herramienta para SuperAdmin que consulta el directorio oficial `https://memorias.lifia.info.unlp.edu.ar/members` (`GET /api/lifia-members`), detecta automáticamente el rol ontológico (`vivo:FacultyMember`, `vivo:GraduateStudent` o `vivo:UndergraduateStudent`), y sincroniza en lote nombres, cargos, correos, líneas de investigación y enlaces externos a sus fotos de perfil en GraphDB usando URIs `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/<NombreApellido>`.
+    *   **Blanqueo / Reset de Base de Datos (`🧹 Blanquear Base de Datos`)**: Permite al SuperAdmin vaciar con confirmación de seguridad (`BLANQUEAR`) todos los recursos de aplicación, personas importadas, lienzos de usuarios, reuniones y tareas (`POST /api/admin/reset-db`), conservando intactas las ontologías base (`VIVO`, `DBLP` y `CSO`).
 *   **Fotos de Perfil de Personas (`schema:image`)**:
     *   Los nodos de personas (*Investigadores*, *Tesistas de Posgrado* y *Tesistas de Grado*) muestran su foto de perfil circular en las tarjetas del lienzo, en el catálogo y en el inspector semántico.
     *   Soporta tres fuentes de vinculación rápida (almacenando siempre **únicamente la URL externa** en GraphDB bajo el predicado `http://schema.org/image`, sin guardar binarios ni Base64 en la base):
