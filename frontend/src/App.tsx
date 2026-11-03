@@ -294,6 +294,17 @@ SELECT ?s ?p ?o WHERE {
   const [mindmapMarkdown, setMindmapMarkdown] = useState<string>(`# Título`);
   const [activeMindmapNode, setActiveMindmapNode] = useState<RDFNode | null>(null);
 
+  // Meeting Bitácora (Notes & Attendance) Modal state on Canvas
+  const [activeMeetingLogNode, setActiveMeetingLogNode] = useState<RDFNode | null>(null);
+  const [meetingLogParticipants, setMeetingLogParticipants] = useState<string[]>([]);
+  const [meetingLogSessions, setMeetingLogSessions] = useState<{ uri: string; date: string; notes: string; attendees: string[] }[]>([]);
+  const [isLoadingMeetingLog, setIsLoadingMeetingLog] = useState(false);
+  const [newMeetingSessionForm, setNewMeetingSessionForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    notes: '',
+    attendees: [] as string[]
+  });
+
   // Catalog / Shared Node Bank state
   const [nodeModeTab, setNodeModeTab] = useState<'catalog' | 'new'>('catalog');
   const [globalCatalogNodes, setGlobalCatalogNodes] = useState<{ uri: string; label: string; type: string; rank?: string; deadlineMonth?: string; subject?: string; externalUrl?: string; photoUrl?: string }[]>([]);
@@ -620,6 +631,132 @@ SELECT ?s ?p ?o WHERE {
       setRulesetStatusMsg(`❌ ${e.message || 'No se pudo cambiar el motor de inferencia'}`);
     } finally {
       setIsSwitchingRuleset(false);
+    }
+  };
+
+  const openMeetingLogModal = async (meetingNode: RDFNode) => {
+    setActiveMeetingLogNode(meetingNode);
+    setIsLoadingMeetingLog(true);
+    try {
+      const query = `
+        PREFIX vivo: <http://vivoweb.org/ontology/core#>
+        PREFIX rfu: <http://cientopolis.org/rfu/>
+
+        SELECT ?participant ?session ?sDate ?sNotes ?sAttendee WHERE {
+          BIND(<${meetingNode.uri}> AS ?meeting)
+          OPTIONAL {
+            { ?meeting rfu:hasParticipant ?participant }
+            UNION
+            { ?meeting vivo:hasMember ?participant }
+            UNION
+            { ?participant vivo:relatedBy ?meeting }
+            UNION
+            { ?meeting vivo:relatedBy ?participant }
+          }
+          OPTIONAL {
+            ?meeting rfu:hasSession ?session .
+            OPTIONAL { ?session rfu:sessionDate ?sDate }
+            OPTIONAL { ?session rfu:sessionNotes ?sNotes }
+            OPTIONAL { ?session rfu:attendedBy ?sAttendee }
+          }
+        }
+      `;
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, infer: false })
+      });
+      const data = await res.json();
+      const participantsSet = new Set<string>();
+      // Also include any person connected to this meeting on the canvas
+      connections.forEach(c => {
+        if (c.from === meetingNode.uri) participantsSet.add(c.to);
+        if (c.to === meetingNode.uri) participantsSet.add(c.from);
+      });
+
+      const sessionMap: Record<string, { uri: string; date: string; notes: string; attendees: string[] }> = {};
+      if (data.results && data.results.bindings) {
+        data.results.bindings.forEach((b: any) => {
+          if (b.participant?.value) {
+            participantsSet.add(b.participant.value);
+          }
+          if (b.session?.value) {
+            const sUri = b.session.value;
+            if (!sessionMap[sUri]) {
+              sessionMap[sUri] = {
+                uri: sUri,
+                date: b.sDate?.value || '',
+                notes: b.sNotes?.value || '',
+                attendees: []
+              };
+            }
+            if (b.sAttendee?.value && !sessionMap[sUri].attendees.includes(b.sAttendee.value)) {
+              sessionMap[sUri].attendees.push(b.sAttendee.value);
+            }
+          }
+        });
+      }
+
+      const participantsArr = Array.from(participantsSet);
+      const sessionsArr = Object.values(sessionMap).sort((a, b) => b.date.localeCompare(a.date));
+      setMeetingLogParticipants(participantsArr);
+      setMeetingLogSessions(sessionsArr);
+      setNewMeetingSessionForm({
+        date: new Date().toISOString().split('T')[0],
+        notes: '',
+        attendees: [...participantsArr]
+      });
+    } catch (e) {
+      console.error('Error al cargar notas y asistencia de la reunión:', e);
+    } finally {
+      setIsLoadingMeetingLog(false);
+    }
+  };
+
+  const toggleMeetingLogAttendee = (uri: string) => {
+    setNewMeetingSessionForm(prev => {
+      const exists = prev.attendees.includes(uri);
+      return {
+        ...prev,
+        attendees: exists ? prev.attendees.filter(u => u !== uri) : [...prev.attendees, uri]
+      };
+    });
+  };
+
+  const handleAddMeetingLogSession = async () => {
+    if (!activeMeetingLogNode) return;
+    if (!newMeetingSessionForm.date.trim() || !newMeetingSessionForm.notes.trim()) {
+      alert('Por favor completa la fecha y el resumen/notas del encuentro.');
+      return;
+    }
+
+    const sessionUri = `${activeMeetingLogNode.uri}_session_${Date.now()}`;
+    const escapedNotes = newMeetingSessionForm.notes.trim().replace(/"/g, '\\"').replace(/\n/g, '\\n');
+
+    let insertQuery = `
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      PREFIX rfu: <http://cientopolis.org/rfu/>
+
+      INSERT DATA {
+        <${activeMeetingLogNode.uri}> rfu:hasSession <${sessionUri}> .
+        <${sessionUri}> rdf:type rfu:MeetingSession ;
+                        rfu:sessionDate "${newMeetingSessionForm.date}" ;
+                        rfu:sessionNotes "${escapedNotes}" .
+    `;
+    newMeetingSessionForm.attendees.forEach(aUri => {
+      insertQuery += `<${sessionUri}> rfu:attendedBy <${aUri}> .\n`;
+    });
+    insertQuery += `}`;
+
+    try {
+      await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: insertQuery })
+      });
+      await openMeetingLogModal(activeMeetingLogNode);
+    } catch (e) {
+      console.error('Error al guardar sesión en bitácora de reunión:', e);
     }
   };
 
@@ -2335,6 +2472,9 @@ SELECT ?s ?p ?o WHERE {
                     setActiveMindmapNode(node);
                     setMindmapMarkdown(node.mindmapContent || `# ${node.label}`);
                     setShowMindmapModal(true);
+                  } else if (node.type.includes('Meeting')) {
+                    e.stopPropagation();
+                    openMeetingLogModal(node);
                   }
                 }}
               >
@@ -2527,6 +2667,37 @@ SELECT ?s ?p ?o WHERE {
                     title="Abrir editor de Mapa Mental"
                   >
                     🧠 Ver / Editar Mapa Mental
+                  </button>
+                )}
+
+                {/* Meeting specific trigger button: Notes & Attendance */}
+                {node.type.includes('Meeting') && (
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openMeetingLogModal(node);
+                    }}
+                    style={{
+                      marginTop: '6px',
+                      padding: '5px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: chip.titleColor,
+                      background: 'rgba(193, 127, 89, 0.16)',
+                      border: `1px solid ${chip.chipColor}66`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      boxShadow: '0 1px 4px rgba(124, 67, 36, 0.12)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Visualizar las notas tomadas en la reunión y la asistencia"
+                  >
+                    📋 Ver Notas y Asistencia
                   </button>
                 )}
               </div>
@@ -3049,18 +3220,34 @@ SELECT ?s ?p ?o WHERE {
 
                   {/* Botones de acción del Modal */}
                   <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                    <button
-                      className="btn"
-                      style={{ color: '#d20f39', borderColor: '#d20f39' }}
-                      onClick={() => {
-                        const targetNode = selectedNode;
-                        setSelectedNode(null);
-                        setIsInspectorOpen(false);
-                        setNodeToDelete(targetNode);
-                      }}
-                    >
-                      🗑️ Eliminar Nodo
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        className="btn"
+                        style={{ color: '#d20f39', borderColor: '#d20f39' }}
+                        onClick={() => {
+                          const targetNode = selectedNode;
+                          setSelectedNode(null);
+                          setIsInspectorOpen(false);
+                          setNodeToDelete(targetNode);
+                        }}
+                      >
+                        🗑️ Eliminar Nodo
+                      </button>
+                      {selectedNode.type.includes('Meeting') && (
+                        <button
+                          className="btn"
+                          style={{ color: '#7C4324', borderColor: '#C17F59', background: 'rgba(193, 127, 89, 0.12)' }}
+                          onClick={() => {
+                            const targetMeeting = selectedNode;
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                            openMeetingLogModal(targetMeeting);
+                          }}
+                        >
+                          📋 Ver Notas y Asistencia
+                        </button>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="btn" onClick={() => { setSelectedNode(null); setIsInspectorOpen(false); }}>Cancelar</button>
                       <button className="btn btn-primary" onClick={saveNodeProperties}>Guardar Cambios</button>
@@ -4218,6 +4405,202 @@ SELECT ?s ?p ?o WHERE {
                   }
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Meeting Bitácora (Notes & Attendance) Modal on Canvas */}
+      {activeMeetingLogNode && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 850,
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={() => setActiveMeetingLogNode(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-mantle)',
+              padding: '26px',
+              borderRadius: '18px',
+              width: '620px',
+              maxWidth: '94vw',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.3)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>
+                  📋 Bitácora de Encuentros: {activeMeetingLogNode.label}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Visualizá y registrá las notas tomadas en la reunión y la asistencia de cada sesión.
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={() => setActiveMeetingLogNode(null)}>✕</button>
+            </div>
+
+            {/* New Session Form */}
+            <div style={{
+              background: 'var(--bg-surface)',
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>➕ Registrar Nuevo Encuentro</div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.75rem' }}>Fecha del Encuentro</label>
+                  <input
+                    type="date"
+                    value={newMeetingSessionForm.date}
+                    onChange={(e) => setNewMeetingSessionForm({ ...newMeetingSessionForm, date: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', display: 'block', marginBottom: '4px', color: 'var(--text-muted)' }}>
+                    Asistentes presentes
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {meetingLogParticipants.length === 0 ? (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        Sin participantes vinculados aún.
+                      </span>
+                    ) : (
+                      meetingLogParticipants.map(pUri => {
+                        const attended = newMeetingSessionForm.attendees.includes(pUri);
+                        const personLabel = nodes.find(n => n.uri === pUri)?.label || getCleanLabel(pUri);
+                        return (
+                          <button
+                            key={pUri}
+                            type="button"
+                            onClick={() => toggleMeetingLogAttendee(pUri)}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: '999px',
+                              border: attended ? '1px solid #40a02b' : '1px solid var(--border-color)',
+                              background: attended ? 'rgba(64, 160, 43, 0.14)' : 'var(--bg-mantle)',
+                              color: attended ? '#40a02b' : 'var(--text-muted)',
+                              fontSize: '0.76rem',
+                              fontWeight: attended ? 600 : 400,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {attended ? '✓ ' : ''}{personLabel}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.75rem' }}>Acuerdos / Avances / Minuta del Encuentro</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ej: Se revisó el capítulo 2 del estado del arte. Próxima entrega: experimento inicial."
+                  value={newMeetingSessionForm.notes}
+                  onChange={(e) => setNewMeetingSessionForm({ ...newMeetingSessionForm, notes: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-mantle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.84rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-sm btn-primary" onClick={handleAddMeetingLogSession}>
+                  💾 Guardar Encuentro en Bitácora
+                </button>
+              </div>
+            </div>
+
+            {/* Sessions List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                Historial de Sesiones ({meetingLogSessions.length})
+              </div>
+              {isLoadingMeetingLog ? (
+                <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', padding: '12px 0' }}>
+                  ⏳ Cargando notas y asistencia...
+                </div>
+              ) : meetingLogSessions.length === 0 ? (
+                <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', fontStyle: 'italic', padding: '12px 0' }}>
+                  Todavía no hay encuentros registrados para esta reunión.
+                </div>
+              ) : (
+                meetingLogSessions.map(sess => (
+                  <div
+                    key={sess.uri}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-investigador)' }}>
+                        🗓️ {sess.date}
+                      </span>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {sess.attendees.map(aUri => {
+                          const personLabel = nodes.find(n => n.uri === aUri)?.label || getCleanLabel(aUri);
+                          return (
+                            <span
+                              key={aUri}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                background: 'rgba(64, 160, 43, 0.12)',
+                                color: '#40a02b',
+                                fontWeight: 600
+                              }}
+                            >
+                              ✓ {personLabel}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: 'var(--text-main)', whiteSpace: 'pre-wrap' }}>
+                      {sess.notes}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

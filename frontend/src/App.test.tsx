@@ -979,4 +979,84 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText(/Motor de inferencia actualizado a OWL-DL/i)).toBeInTheDocument();
     });
   });
+
+  it('debe mostrar en el nodo de reunión en el canvas un botón para visualizar las notas tomadas y la asistencia', async () => {
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/SeguimientoSemanal' },
+                  type: { value: 'http://vivoweb.org/ontology/core#Meeting' },
+                  label: { value: 'Seguimiento Semanal Tesis' },
+                  x: { value: '250' },
+                  y: { value: '200' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/AnaTesista' },
+                  type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                  label: { value: 'Ana Tesista' },
+                  x: { value: '500' },
+                  y: { value: '200' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('SELECT ?participant ?session ?sDate ?sNotes ?sAttendee')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  participant: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/AnaTesista' },
+                  session: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/SeguimientoSemanal_session_1' },
+                  sDate: { value: '2026-11-02' },
+                  sNotes: { value: 'Revisión del marco teórico y experimentos con SPARQL.' },
+                  sAttendee: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/AnaTesista' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Verificar que el nodo Reunión aparece en el canvas con el botón "📋 Ver Notas y Asistencia"
+    const verNotasBtn = await screen.findByText(/📋 Ver Notas y Asistencia/i);
+    expect(verNotasBtn).toBeInTheDocument();
+
+    // Hacer clic en el botón del nodo Reunión
+    fireEvent.click(verNotasBtn);
+
+    // Verificar que se abre el modal con las notas tomadas y la asistencia registrada
+    await waitFor(() => {
+      expect(screen.getByText(/📋 Bitácora de Encuentros: Seguimiento Semanal Tesis/i)).toBeInTheDocument();
+      expect(screen.getByText(/Revisión del marco teórico y experimentos con SPARQL\./i)).toBeInTheDocument();
+      expect(screen.getAllByText(/✓ Ana Tesista/i).length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
