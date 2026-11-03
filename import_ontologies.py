@@ -2,6 +2,7 @@
 import os
 import urllib.request
 import urllib.error
+import urllib.parse
 import base64
 import sys
 
@@ -119,6 +120,35 @@ def main():
             print(f"Error de HTTP cargando {name}: {e.code} - {e.read().decode('utf-8', errors='ignore')}")
         except Exception as e:
             print(f"Error inesperado cargando {name}: {e}")
+
+    # Configurar motor de inferencia (ruleset) si se indica por CLI (--ruleset=...) o en GRAPHDB_RULESET
+    target_ruleset = os.environ.get('GRAPHDB_RULESET') or config.get('GRAPHDB_RULESET')
+    for arg in sys.argv[1:]:
+        if arg.startswith('--ruleset='):
+            target_ruleset = arg.split('=', 1)[1].strip()
+        elif arg == '--owl-dl':
+            target_ruleset = 'owl-max-optimized'
+
+    if target_ruleset:
+        if target_ruleset == 'owl-dl':
+            target_ruleset = 'owl-max-optimized'
+        print(f"⚙️ Configurando motor de inferencia en GraphDB a '{target_ruleset}'...")
+        sys_updates = [
+            f'PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA {{ _:b sys:addRuleset "{target_ruleset}" }}',
+            f'PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA {{ _:b sys:defaultRuleset "{target_ruleset}" }}',
+            f'PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA {{ _:b sys:reinfer [] }}'
+        ]
+        for sparql_update in sys_updates:
+            try:
+                body = urllib.parse.urlencode({'update': sparql_update}).encode('utf-8')
+                req_headers = headers.copy()
+                req_headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                sys_req = urllib.request.Request(statements_endpoint, data=body, headers=req_headers, method='POST')
+                with urllib.request.urlopen(sys_req):
+                    pass
+            except Exception as e:
+                print(f"Advertencia al aplicar ruleset '{target_ruleset}': {e}")
+        print(f"-> Motor de inferencia '{target_ruleset}' activo y grafo re-inferido.")
 
 if __name__ == '__main__':
     main()

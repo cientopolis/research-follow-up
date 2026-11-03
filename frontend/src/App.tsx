@@ -171,6 +171,10 @@ export default function App() {
 
   // Global Inference Toggle state (default false / off)
   const [useInference, setUseInference] = useState<boolean>(false);
+  // Active GraphDB Inference Engine (ruleset) state: 'rdfsplus-optimized' vs 'owl-max-optimized' (OWL-DL)
+  const [inferenceRuleset, setInferenceRuleset] = useState<'rdfsplus-optimized' | 'owl-max-optimized'>('rdfsplus-optimized');
+  const [isSwitchingRuleset, setIsSwitchingRuleset] = useState<boolean>(false);
+  const [rulesetStatusMsg, setRulesetStatusMsg] = useState<string | null>(null);
 
   // Inspector property editing states
   const [nodeDetails, setNodeDetails] = useState<{ [predURI: string]: string }>({});
@@ -579,6 +583,45 @@ SELECT ?s ?p ?o WHERE {
       fetchGraphData();
     }
   }, [useInference]);
+
+  const fetchActiveRuleset = async () => {
+    try {
+      const response = await fetchWithAuth('/api/graphdb/ruleset');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.ruleset === 'owl-max-optimized' || data.ruleset === 'rdfsplus-optimized') {
+        setInferenceRuleset(data.ruleset);
+      }
+    } catch (e) {
+      console.error("Error al consultar motor de inferencia activo en GraphDB:", e);
+    }
+  };
+
+  const changeInferenceRuleset = async (newRuleset: 'rdfsplus-optimized' | 'owl-max-optimized') => {
+    if (isSwitchingRuleset || newRuleset === inferenceRuleset) return;
+    setIsSwitchingRuleset(true);
+    setRulesetStatusMsg(null);
+    try {
+      const response = await fetchWithAuth('/api/graphdb/ruleset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ruleset: newRuleset })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al cambiar el motor de inferencia');
+      }
+      setInferenceRuleset(newRuleset);
+      setRulesetStatusMsg(data.message || `Motor cambiado a ${newRuleset}`);
+      if (useInference && user) {
+        await fetchGraphData();
+      }
+    } catch (e: any) {
+      setRulesetStatusMsg(`❌ ${e.message || 'No se pudo cambiar el motor de inferencia'}`);
+    } finally {
+      setIsSwitchingRuleset(false);
+    }
+  };
 
   const fetchCatalogResearchers = async () => {
     const query = `
@@ -1916,7 +1959,9 @@ SELECT ?s ?p ?o WHERE {
                   onClick={() => {
                     setShowConfigModal(true);
                     setIsUserMenuOpen(false);
+                    setRulesetStatusMsg(null);
                     fetchCatalogResearchers();
+                    fetchActiveRuleset();
                   }}
                   style={{
                     background: 'none',
@@ -3824,6 +3869,69 @@ SELECT ?s ?p ?o WHERE {
                   ? '⚡ Inferencia ACTIVADA: Retorna relaciones deducidas automáticamente por las ontologías VIVO, DBLP y CSO.'
                   : '🔒 Inferencia DESACTIVADA (Default): Retorna únicamente las tripletas creadas explícitamente por los usuarios.'
                 }
+              </div>
+
+              {/* Selector de Motor de Inferencia en GraphDB (RDFS-Plus vs OWL-DL) */}
+              <div style={{
+                marginTop: '6px',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label htmlFor="graphdb-ruleset-select" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    ⚙️ Motor de Inferencia en GraphDB (Ruleset):
+                  </label>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    fontWeight: 600,
+                    background: inferenceRuleset === 'owl-max-optimized' ? 'rgba(114, 135, 253, 0.15)' : 'rgba(22, 163, 74, 0.12)',
+                    color: inferenceRuleset === 'owl-max-optimized' ? 'var(--accent)' : '#15803d'
+                  }}>
+                    {inferenceRuleset === 'owl-max-optimized' ? 'OWL-DL Activo' : 'RDFS-Plus Activo'}
+                  </span>
+                </div>
+
+                <select
+                  id="graphdb-ruleset-select"
+                  className="input-field"
+                  value={inferenceRuleset}
+                  disabled={isSwitchingRuleset}
+                  onChange={(e) => changeInferenceRuleset(e.target.value as 'rdfsplus-optimized' | 'owl-max-optimized')}
+                  style={{ width: '100%', fontSize: '0.82rem', cursor: isSwitchingRuleset ? 'wait' : 'pointer' }}
+                >
+                  <option value="rdfsplus-optimized">RDFS-Plus (Optimized) — Motor por defecto</option>
+                  <option value="owl-max-optimized">OWL-DL / OWL-Max (Optimized) — Razonador OWL-DL</option>
+                </select>
+
+                <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                  {inferenceRuleset === 'owl-max-optimized'
+                    ? '🦉 OWL-DL (owl-max-optimized): Habilita razonamiento expresivo OWL-DL (clases equivalentes, restricciones de propiedad, simetría, transitividad e inversas completas).'
+                    : '📐 RDFS-Plus (rdfsplus-optimized): Motor ligero por defecto con soporte para jerarquías RDFS, owl:inverseOf, owl:SymmetricProperty y owl:TransitiveProperty.'}
+                </div>
+
+                {isSwitchingRuleset && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
+                    ⏳ Cambiando motor de inferencia y re-infiriendo tripletas en GraphDB...
+                  </div>
+                )}
+
+                {rulesetStatusMsg && !isSwitchingRuleset && (
+                  <div style={{
+                    fontSize: '0.73rem',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    background: rulesetStatusMsg.startsWith('❌') ? 'rgba(210, 15, 57, 0.1)' : 'rgba(22, 163, 74, 0.1)',
+                    color: rulesetStatusMsg.startsWith('❌') ? '#d20f39' : '#15803d',
+                    fontWeight: 500
+                  }}>
+                    {rulesetStatusMsg}
+                  </div>
+                )}
               </div>
             </div>
 

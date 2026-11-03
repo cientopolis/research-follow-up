@@ -29,6 +29,7 @@ const GRAPHDB_URL = process.env.GRAPHDB_URL || 'http://localhost:7200';
 const REPO = process.env.GRAPHDB_REPOSITORY || 'researcherDB';
 const USER = process.env.GRAPHDB_USER;
 const PASSWORD = process.env.GRAPHDB_PASSWORD;
+const INITIAL_RULESET = process.env.GRAPHDB_RULESET; // 'rdfsplus-optimized' o 'owl-max-optimized' (OWL-DL)
 
 const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'admin@cientopolis.org';
 const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'admin123456';
@@ -447,6 +448,103 @@ app.post('/api/admin/reset-db', checkAuth, checkSuperAdmin, async (req, res) => 
   }
 });
 
+// 6. Consultar el motor de inferencia (ruleset) activo en GraphDB
+app.get('/api/graphdb/ruleset', checkAuth, async (req, res) => {
+  const query = `
+    PREFIX sys: <http://www.ontotext.com/owlim/system#>
+    SELECT ?ruleset WHERE {
+      _:s sys:defaultRuleset ?ruleset
+    }
+  `;
+  try {
+    const params = { query };
+    const endpoint = `${GRAPHDB_URL}/repositories/${REPO}?${new URLSearchParams(params).toString()}`;
+    const headers = getGraphDBHeaders('application/x-www-form-urlencoded');
+    const response = await fetch(endpoint, { method: 'GET', headers });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: 'Error al consultar ruleset en GraphDB', details: errorText });
+    }
+
+    const data = await response.json();
+    const activeRuleset = data?.results?.bindings?.[0]?.ruleset?.value || 'rdfsplus-optimized';
+    return res.status(200).json({
+      ruleset: activeRuleset,
+      available: [
+        { id: 'rdfsplus-optimized', label: 'RDFS-Plus (Optimized) — Motor actual por defecto' },
+        { id: 'owl-max-optimized', label: 'OWL-DL / OWL-Max (Optimized) — Razonamiento completo OWL-DL' }
+      ]
+    });
+  } catch (error) {
+    console.error('[GraphDB Ruleset API] Error al obtener ruleset:', error);
+    return res.status(500).json({ error: 'Error al obtener motor de inferencia de GraphDB', details: error.message });
+  }
+});
+
+// 7. Cambiar el motor de inferencia (ruleset) en GraphDB entre el actual (rdfsplus-optimized) y OWL-DL (owl-max-optimized)
+app.post('/api/graphdb/ruleset', checkAuth, async (req, res) => {
+  const { ruleset } = req.body;
+  const ALLOWED_RULESETS = {
+    'rdfsplus-optimized': 'RDFS-Plus (Optimized)',
+    'owl-max-optimized': 'OWL-DL / OWL-Max (Optimized)',
+    'owl-dl': 'OWL-DL / OWL-Max (Optimized)'
+  };
+
+  if (!ruleset || !ALLOWED_RULESETS[ruleset]) {
+    return res.status(400).json({
+      error: 'Motor de inferencia no válido. Use "rdfsplus-optimized" o "owl-max-optimized" (OWL-DL).'
+    });
+  }
+
+  const targetRuleset = ruleset === 'owl-dl' ? 'owl-max-optimized' : ruleset;
+  const endpoint = `${GRAPHDB_URL}/repositories/${REPO}/statements`;
+  const headers = getGraphDBHeaders('application/x-www-form-urlencoded');
+
+  const runSysUpdate = async (sparqlUpdate) => {
+    const body = new URLSearchParams({ update: sparqlUpdate }).toString();
+    const resp = await fetch(endpoint, { method: 'POST', headers, body });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`GraphDB ${resp.status}: ${errText}`);
+    }
+  };
+
+  try {
+    console.log(`[GraphDB Ruleset API] Cambiando motor de inferencia a '${targetRuleset}' en repositorio ${REPO}...`);
+    // 1. Verificar si el ruleset ya está registrado en el repositorio para evitar recompilación innecesaria
+    const listQuery = `PREFIX sys: <http://www.ontotext.com/owlim/system#> SELECT ?r WHERE { _:s sys:listRulesets ?r }`;
+    const listUrl = `${GRAPHDB_URL}/repositories/${REPO}?${new URLSearchParams({ query: listQuery }).toString()}`;
+    const listResp = await fetch(listUrl, { method: 'GET', headers });
+    let loadedRulesets = [];
+    if (listResp.ok) {
+      const listData = await listResp.json();
+      loadedRulesets = (listData?.results?.bindings || []).map(b => b.r?.value);
+    }
+
+    if (!loadedRulesets.includes(targetRuleset)) {
+      await runSysUpdate(`PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:addRuleset "${targetRuleset}" }`);
+    }
+    // 2. Establecerlo como ruleset por defecto
+    await runSysUpdate(`PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:defaultRuleset "${targetRuleset}" }`);
+    // 3. Re-ejecutar inferencia sobre los enunciados existentes
+    await runSysUpdate(`PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:reinfer [] }`);
+
+    return res.status(200).json({
+      success: true,
+      ruleset: targetRuleset,
+      label: ALLOWED_RULESETS[targetRuleset],
+      message: `Motor de inferencia actualizado a ${ALLOWED_RULESETS[targetRuleset]} (${targetRuleset}) y grafo re-inferido.`
+    });
+  } catch (error) {
+    console.error('[GraphDB Ruleset API] Error cambiando motor de inferencia:', error);
+    return res.status(500).json({
+      error: 'Error al cambiar el motor de inferencia en GraphDB',
+      details: error.message
+    });
+  }
+});
+
 // Servir frontend en producción
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'frontend/dist')));
@@ -455,10 +553,39 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`==================================================`);
   console.log(` Servidor backend escuchando en puerto ${PORT}`);
   console.log(` Conectado a GraphDB en: ${GRAPHDB_URL}`);
   console.log(` Repositorio activo: ${REPO}`);
   console.log(`==================================================`);
+
+  if (INITIAL_RULESET) {
+    const target = INITIAL_RULESET === 'owl-dl' ? 'owl-max-optimized' : INITIAL_RULESET;
+    if (target === 'rdfsplus-optimized' || target === 'owl-max-optimized') {
+      try {
+        const headers = getGraphDBHeaders('application/x-www-form-urlencoded');
+        const checkQuery = `PREFIX sys: <http://www.ontotext.com/owlim/system#> SELECT ?r WHERE { _:s sys:defaultRuleset ?r }`;
+        const checkResp = await fetch(`${GRAPHDB_URL}/repositories/${REPO}?${new URLSearchParams({ query: checkQuery }).toString()}`, { method: 'GET', headers });
+        if (checkResp.ok) {
+          const checkData = await checkResp.json();
+          const current = checkData?.results?.bindings?.[0]?.r?.value;
+          if (current && current !== target) {
+            console.log(`[GraphDB Init] Aplicando GRAPHDB_RULESET='${target}' (actual: '${current}')...`);
+            const statementsUrl = `${GRAPHDB_URL}/repositories/${REPO}/statements`;
+            for (const q of [
+              `PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:addRuleset "${target}" }`,
+              `PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:defaultRuleset "${target}" }`,
+              `PREFIX sys: <http://www.ontotext.com/owlim/system#> INSERT DATA { _:b sys:reinfer [] }`
+            ]) {
+              await fetch(statementsUrl, { method: 'POST', headers, body: new URLSearchParams({ update: q }).toString() });
+            }
+            console.log(`[GraphDB Init] Motor de inferencia establecido en '${target}'.`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[GraphDB Init] No se pudo verificar/aplicar GRAPHDB_RULESET al iniciar: ${e.message}`);
+      }
+    }
+  }
 });

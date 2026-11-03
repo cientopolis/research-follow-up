@@ -97,6 +97,8 @@ GRAPHDB_URL=http://graphdb:7200
 GRAPHDB_REPOSITORY=researcherDB
 GRAPHDB_USER=
 GRAPHDB_PASSWORD=
+# Motor de inferencia en GraphDB: 'rdfsplus-optimized' (por defecto) o 'owl-max-optimized' (OWL-DL)
+GRAPHDB_RULESET=rdfsplus-optimized
 
 # --- Email de SuperAdmin ---
 SUPERADMIN_EMAIL=admin@cientopolis.org
@@ -139,18 +141,29 @@ docker compose ps
 
 ---
 
-## 🗄️ Etapa 5: Crear el Repositorio en GraphDB y Cargar las Ontologías (Una sola vez)
+## 🗄️ Etapa 5: Crear el Repositorio en GraphDB, Elegir el Motor de Inferencia y Cargar las Ontologías (Una sola vez)
 
 1. Abrí `http://<IP-DEL-SERVIDOR>:7200` (o `http://localhost:7200` desde el servidor).
 2. Andá a **Setup → Repositories → Create new repository → GraphDB Repository**.
 3. En **Repository ID**, escribí exactamente: **`researcherDB`**
-4. En **Ruleset**, elegí **`RDFS-Plus (Optimized)`** y hacé clic en **Create**.
+4. En **Ruleset** (motor de inferencia), podés elegir entre:
+   - **`RDFS-Plus (Optimized)`** (`rdfsplus-optimized`, motor ligero por defecto), o
+   - **`OWL-Max (Optimized)`** (`owl-max-optimized`, razonador **OWL-DL** expresivo).
+   Luego hacé clic en **Create**.
 5. Volvé a la raíz del proyecto en la terminal de Linux y ejecutá el script de carga de ontologías (`VIVO`, `DBLP`, `CSO`):
    ```bash
    cd ~/research-follow-up
    python3 import_ontologies.py
    ```
-   *(El script lee automáticamente `docker/.env.production`, usa librerías nativas de Python sin requerir `pip install`, y verás el mensaje `Código de respuesta: 204` para cada ontología).*
+   *(El script lee automáticamente `docker/.env.production` —incluyendo `GRAPHDB_RULESET` si lo definiste—, usa librerías nativas de Python sin requerir `pip install`, y verás el mensaje `Código de respuesta: 204` para cada ontología).*
+   > 💡 **Tip — Cambiar el motor de inferencia después del deploy:**
+   > - **Desde la interfaz web de DireAtento (en caliente):** Entrá al menú de tu usuario arriba a la derecha → **⚙️ Configuración General** → sección **🧠 Razonamiento e Inferencia GraphDB** y cambiá el desplegable **⚙️ Motor de Inferencia en GraphDB (Ruleset)** entre **RDFS-Plus (`rdfsplus-optimized`)** y **OWL-DL (`owl-max-optimized`)**.
+   > - **Desde línea de comandos en el servidor:**
+   >   ```bash
+   >   python3 import_ontologies.py --owl-dl
+   >   # o para volver al motor por defecto:
+   >   python3 import_ontologies.py --ruleset=rdfsplus-optimized
+   >   ```
 
 ---
 

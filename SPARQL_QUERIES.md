@@ -439,4 +439,38 @@ INSERT DATA {
 }
 ```
 
+---
+
+## 6. Gestión del Motor de Inferencia en GraphDB (`server.js` / `App.tsx`)
+
+### 6.1 Consultar el motor de inferencia (ruleset) activo (`GET /api/graphdb/ruleset`)
+Obtiene el ruleset activo por defecto en el repositorio `researcherDB` mediante el vocabulario de sistema de Ontotext GraphDB (`http://www.ontotext.com/owlim/system#`).
+*   **Archivo origen**: [server.js](file:///Users/dtorres/development/research-follow-up/server.js#L451)
+*   **Query**:
+    ```sparql
+    PREFIX sys: <http://www.ontotext.com/owlim/system#>
+    SELECT ?ruleset WHERE {
+      _:s sys:defaultRuleset ?ruleset
+    }
+    ```
+
+### 6.2 Cambiar el motor de inferencia entre RDFS-Plus (`rdfsplus-optimized`) y OWL-DL (`owl-max-optimized`) (`POST /api/graphdb/ruleset`)
+Registra el ruleset en caso de no estar cargado, cambia el `sys:defaultRuleset` y dispara `sys:reinfer` para re-inferir todas las tripletas del repositorio con el motor seleccionado.
+*   **Archivo origen**: [server.js](file:///Users/dtorres/development/research-follow-up/server.js#L485)
+*   **Queries SPARQL Update de sistema**:
+    ```sparql
+    # 1. Registrar ruleset si aún no figura en sys:listRulesets
+    PREFIX sys: <http://www.ontotext.com/owlim/system#>
+    INSERT DATA { _:b sys:addRuleset "owl-max-optimized" }
+
+    # 2. Establecer ruleset activo ("rdfsplus-optimized" o "owl-max-optimized")
+    PREFIX sys: <http://www.ontotext.com/owlim/system#>
+    INSERT DATA { _:b sys:defaultRuleset "owl-max-optimized" }
+
+    # 3. Re-ejecutar inferencia sobre todo el grafo
+    PREFIX sys: <http://www.ontotext.com/owlim/system#>
+    INSERT DATA { _:b sys:reinfer [] }
+    ```
+
+
 

@@ -42,6 +42,7 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - GRAPHDB_URL=${GRAPHDB_URL:-http://graphdb:7200}
+      - GRAPHDB_RULESET=${GRAPHDB_RULESET:-rdfsplus-optimized}
     depends_on:
       - graphdb
     networks:

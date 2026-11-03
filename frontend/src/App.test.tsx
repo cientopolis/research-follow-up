@@ -118,8 +118,14 @@ describe('App Canvas Component Tests', () => {
   it('debe permitir vincular la cuenta a un investigador existente en Configuración General y destacarlo en el canvas', async () => {
     let callCount = 0;
     const fetchMock = vi.fn().mockImplementation((url, options) => {
-      const body = JSON.parse(options.body);
-      const query = body.query;
+      if (url === '/api/graphdb/ruleset') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ruleset: 'rdfsplus-optimized' })
+        });
+      }
+      const body = options && options.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
 
       if (query.includes('SELECT DISTINCT ?node')) {
         // Return a graph containing an existing researcher node "Dr. Smith"
@@ -907,6 +913,70 @@ describe('App Canvas Component Tests', () => {
 
     await waitFor(() => {
       expect(deleteConnectionQuery).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres> <http://vivoweb.org/ontology/core#advisor> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy>');
+    });
+  });
+
+  it('debe permitir cambiar el motor de inferencia en GraphDB entre el actual (rdfsplus-optimized) y OWL-DL (owl-max-optimized) desde Configuración General', async () => {
+    let selectedRulesetPosted = '';
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      if (url === '/api/graphdb/ruleset' && (!options || !options.method || options.method === 'GET')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ruleset: 'rdfsplus-optimized',
+            available: [
+              { id: 'rdfsplus-optimized', label: 'RDFS-Plus (Optimized) — Motor actual por defecto' },
+              { id: 'owl-max-optimized', label: 'OWL-DL / OWL-Max (Optimized) — Razonamiento completo OWL-DL' }
+            ]
+          })
+        });
+      }
+
+      if (url === '/api/graphdb/ruleset' && options && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        selectedRulesetPosted = body.ruleset;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            ruleset: body.ruleset,
+            message: `Motor de inferencia actualizado a OWL-DL / OWL-Max (Optimized) (${body.ruleset}) y grafo re-inferido.`
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👤')).toBeInTheDocument();
+    });
+
+    // Abrir el menú de usuario y luego Configuración General
+    fireEvent.click(screen.getByText('👤'));
+    const configBtn = await screen.findByText(/⚙️ Configuración General/i);
+    fireEvent.click(configBtn);
+
+    // Verificar que se muestra el selector de motor de inferencia con RDFS-Plus activo
+    const rulesetSelect = await screen.findByLabelText(/Motor de Inferencia en GraphDB/i) as HTMLSelectElement;
+    expect(rulesetSelect).toBeInTheDocument();
+    expect(rulesetSelect.value).toBe('rdfsplus-optimized');
+
+    // Cambiar el motor de inferencia a OWL-DL (owl-max-optimized)
+    fireEvent.change(rulesetSelect, { target: { value: 'owl-max-optimized' } });
+
+    await waitFor(() => {
+      expect(selectedRulesetPosted).toBe('owl-max-optimized');
+      expect(screen.getByText(/OWL-DL Activo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Motor de inferencia actualizado a OWL-DL/i)).toBeInTheDocument();
     });
   });
 });

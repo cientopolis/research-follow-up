@@ -56,12 +56,14 @@ Copia la plantilla `.env.example` y renómbrala a `.env.local` en la raíz del p
 ```bash
 cp .env.example .env.local
 ```
-Edita `.env.local` con las credenciales de tu GraphDB local:
+Edita `.env.local` con las credenciales y el motor de inferencia de tu GraphDB local:
 ```env
 GRAPHDB_URL=http://localhost:7200
 GRAPHDB_REPOSITORY=researcherDB
 GRAPHDB_USER=tu_usuario
 GRAPHDB_PASSWORD=tu_clave
+# Motor de inferencia inicial: 'rdfsplus-optimized' (por defecto) o 'owl-max-optimized' (OWL-DL)
+GRAPHDB_RULESET=rdfsplus-optimized
 ```
 
 ### Paso 2: Instalar Dependencias
@@ -82,10 +84,17 @@ Ejecuta el script de carga en Python para subir los esquemas `VIVO`, `DBLP` y `C
 python3 import_ontologies.py
 ```
 *Si las credenciales y el servidor están corriendo, verás el mensaje de conexión exitosa e importación correcta (HTTP 204).*
-> 💡 **Blanqueo / Reset desde línea de comandos**: Si necesitas limpiar completamente el repositorio en GraphDB y volver a importar las ontologías desde cero, ejecuta:
-> ```bash
-> python3 import_ontologies.py --reset
-> ```
+> 💡 **Blanqueo / Reset y elección del motor de inferencia desde línea de comandos**:
+> * Para limpiar completamente el repositorio en GraphDB y volver a importar las ontologías desde cero:
+>   ```bash
+>   python3 import_ontologies.py --reset
+>   ```
+> * Para indicar o cambiar el motor de inferencia a **OWL-DL** (`owl-max-optimized`) o **RDFS-Plus** (`rdfsplus-optimized`) durante la carga:
+>   ```bash
+>   python3 import_ontologies.py --owl-dl
+>   # o bien:
+>   python3 import_ontologies.py --ruleset=rdfsplus-optimized
+>   ```
 
 ---
 
@@ -156,6 +165,10 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
         1. **🌐 URL Web**: Enlace directo a cualquier imagen pública (`https://...`).
         2. **🔵 Cuenta Google**: Vinculación con un clic al avatar de la cuenta Google autenticada en Firebase (`user.photoURL`).
         3. **🏛️ Directorio Memorias@LIFIA**: Buscador integrado conectado a `memorias.lifia.info.unlp.edu.ar/members`.
+*   **Selector de Motor de Inferencia en GraphDB (`⚙️ Configuración General`)**:
+    *   Permite activar/desactivar la inferencia en las consultas del lienzo (`infer=true` / `infer=false`) y **cambiar en caliente el motor de razonamiento (ruleset)** activo del repositorio `researcherDB` en Ontotext GraphDB (`GET/POST /api/graphdb/ruleset`) entre:
+        1. **`rdfsplus-optimized` (RDFS-Plus — Motor por defecto)**: Razonador ligero con soporte para jerarquías RDFS, propiedades inversas (`owl:inverseOf`), simétricas y transitivas.
+        2. **`owl-max-optimized` (OWL-DL / OWL-Max)**: Razonador expresivo OWL-DL con soporte para equivalencia de clases, restricciones de propiedades y axiomas OWL completos, ejecutando automáticamente `sys:reinfer` al cambiar de motor.
 
 ---
 
