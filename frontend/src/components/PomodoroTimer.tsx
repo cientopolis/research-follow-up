@@ -49,8 +49,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
   // UX Options
   const [selectedSound, setSelectedSound] = useState<'chime' | 'bell' | 'digital'>('chime');
-  const [selectedTickSound, setSelectedTickSound] = useState<'classic' | 'wood' | 'noise'>('classic');
-  const [soundVolume, setSoundVolume] = useState(0.8);
+  const [selectedTickSound, setSelectedTickSound] = useState<'kitchen-audio' | 'kitchen' | 'classic' | 'pendulum' | 'wood' | 'noise'>('kitchen-audio');
+  const [soundVolume, setSoundVolume] = useState(1.0);
   const [autoStartBreak, setAutoStartBreak] = useState(true);
   const [autoStartWork, setAutoStartWork] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -115,6 +115,45 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     }
     return localStorage.getItem('pomodoro_standalone_open') !== 'true';
   };
+
+  // Continuous loop audio ref for real kitchen timer recording
+  const loopAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const audio = new Audio('/sounds/timer-ticking.mp3');
+      audio.loop = true;
+      audio.volume = Math.min(1.0, Math.max(0, soundVolume));
+      loopAudioRef.current = audio;
+    }
+    return () => {
+      if (loopAudioRef.current) {
+        loopAudioRef.current.pause();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loopAudioRef.current) {
+      loopAudioRef.current.volume = Math.min(1.0, Math.max(0, soundVolume));
+    }
+  }, [soundVolume]);
+
+  useEffect(() => {
+    const audio = loopAudioRef.current;
+    if (!audio) return;
+
+    const shouldPlay = timerRunning && enableTickTock && selectedTickSound === 'kitchen-audio' && shouldPlayAudio();
+
+    if (shouldPlay) {
+      audio.volume = Math.min(1.0, Math.max(0, soundVolume));
+      audio.play().catch(err => {
+        console.warn("Continuous audio playback deferred or blocked:", err);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [timerRunning, enableTickTock, selectedTickSound, soundVolume]);
 
   const stateRef = useRef({
     timeLeft,
@@ -528,79 +567,190 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     }
   };
 
-  const playTickTock = (isEven: boolean) => {
+  // Buffer cache for mechanical clock and kitchen timer ticks
+  const clockBuffersRef = useRef<{ [key: string]: AudioBuffer }>({});
+
+  const getMechanicalClockBuffer = (
+    audioCtx: AudioContext,
+    soundType: 'kitchen' | 'classic' | 'pendulum',
+    isEven: boolean
+  ): AudioBuffer => {
+    const sampleRate = audioCtx.sampleRate || 44100;
+    const cacheKey = `${soundType}_${isEven ? 'tic' : 'tac'}_${sampleRate}`;
+    if (clockBuffersRef.current[cacheKey]) {
+      return clockBuffersRef.current[cacheKey];
+    }
+
+    let duration = 0.055;
+    if (soundType === 'pendulum') duration = 0.085;
+    if (soundType === 'classic') duration = 0.045;
+
+    const n = Math.floor(sampleRate * duration);
+    const buffer = audioCtx.createBuffer(1, n, sampleRate);
+    const channelData = buffer.getChannelData(0);
+
+    if (soundType === 'kitchen') {
+      // -----------------------------------------------------------------
+      // Timer de Cocina Mecánico (resorte de cuerda y escape de engranaje)
+      // Sonido de mecanismo de resorte de cocina: chasquido seco y metálico
+      // -----------------------------------------------------------------
+      const f1 = isEven ? 2950 : 2350;
+      const f2 = isEven ? 4500 : 3700;
+      const fBody = isEven ? 1450 : 1200;
+
+      const impacts = [
+        { delay: 0.000, amp: 0.70, decay: 0.006 },
+        { delay: 0.0035, amp: 1.00, decay: 0.016 },
+        { delay: 0.008, amp: 0.40, decay: 0.010 }
+      ];
+
+      for (let i = 0; i < n; i++) {
+        const t = i / sampleRate;
+        let s = 0;
+        for (const imp of impacts) {
+          if (t >= imp.delay) {
+            const dt = t - imp.delay;
+            const env = Math.exp(-dt / imp.decay);
+            const noise = (Math.random() * 2 - 1) * Math.exp(-dt / 0.0025);
+            const ring1 = Math.sin(2 * Math.PI * f1 * dt);
+            const ring2 = Math.sin(2 * Math.PI * f2 * dt) * 0.45;
+            const ringBody = Math.sin(2 * Math.PI * fBody * dt) * 0.6;
+            s += imp.amp * env * (noise * 0.35 + ring1 * 0.35 + ring2 * 0.15 + ringBody * 0.35);
+          }
+        }
+        channelData[i] = s;
+      }
+    } else if (soundType === 'classic') {
+      // -----------------------------------------------------------------
+      // Reloj Mecánico de Cuerda / Cronómetro Vintage (escape de áncora)
+      // Tic-tac nítido, seco y preciso de rueda de escape de metal
+      // -----------------------------------------------------------------
+      const f1 = isEven ? 3600 : 2900;
+      const f2 = isEven ? 5600 : 4700;
+
+      const impacts = [
+        { delay: 0.000, amp: 0.60, decay: 0.004 },
+        { delay: 0.0028, amp: 1.00, decay: 0.012 },
+        { delay: 0.0055, amp: 0.35, decay: 0.008 }
+      ];
+
+      for (let i = 0; i < n; i++) {
+        const t = i / sampleRate;
+        let s = 0;
+        for (const imp of impacts) {
+          if (t >= imp.delay) {
+            const dt = t - imp.delay;
+            const env = Math.exp(-dt / imp.decay);
+            const noise = (Math.random() * 2 - 1) * Math.exp(-dt / 0.0018);
+            const ring1 = Math.sin(2 * Math.PI * f1 * dt);
+            const ring2 = Math.sin(2 * Math.PI * f2 * dt) * 0.5;
+            s += imp.amp * env * (noise * 0.40 + ring1 * 0.40 + ring2 * 0.20);
+          }
+        }
+        channelData[i] = s;
+      }
+    } else {
+      // -----------------------------------------------------------------
+      // Reloj de Péndulo (Reloj de pared antiguo con caja de resonancia)
+      // Tic-tac pausado y hueco de péndulo tradicional
+      // -----------------------------------------------------------------
+      const f1 = isEven ? 1150 : 920;
+      const f2 = isEven ? 1900 : 1550;
+      const fWood = isEven ? 420 : 340;
+
+      const impacts = [
+        { delay: 0.000, amp: 0.70, decay: 0.012 },
+        { delay: 0.006, amp: 1.00, decay: 0.032 }
+      ];
+
+      for (let i = 0; i < n; i++) {
+        const t = i / sampleRate;
+        let s = 0;
+        for (const imp of impacts) {
+          if (t >= imp.delay) {
+            const dt = t - imp.delay;
+            const env = Math.exp(-dt / imp.decay);
+            const noise = (Math.random() * 2 - 1) * Math.exp(-dt / 0.005);
+            const ring1 = Math.sin(2 * Math.PI * f1 * dt);
+            const ring2 = Math.sin(2 * Math.PI * f2 * dt) * 0.3;
+            const ringWood = Math.sin(2 * Math.PI * fWood * dt) * 0.7;
+            s += imp.amp * env * (noise * 0.25 + ring1 * 0.35 + ring2 * 0.15 + ringWood * 0.45);
+          }
+        }
+        channelData[i] = s;
+      }
+    }
+
+    // Normalizar a 0.98 para máximo volumen limpio y nítido
+    let max = 0;
+    for (let i = 0; i < n; i++) {
+      if (Math.abs(channelData[i]) > max) max = Math.abs(channelData[i]);
+    }
+    if (max > 0) {
+      for (let i = 0; i < n; i++) {
+        channelData[i] = (channelData[i] / max) * 0.98;
+      }
+    }
+
+    clockBuffersRef.current[cacheKey] = buffer;
+    return buffer;
+  };
+
+  const playTickTock = (isEven: boolean, overrideTickSound?: 'kitchen-audio' | 'kitchen' | 'classic' | 'pendulum' | 'wood' | 'noise') => {
     if (!shouldPlayAudio()) return;
+    initAudio();
     if (!audioCtxRef.current || audioCtxRef.current.state === 'suspended') {
       return;
     }
     try {
       const audioCtx = audioCtxRef.current;
-      const now = audioCtx.currentTime + 0.02; // 20ms buffer for Safari scheduler
+      const rawType = overrideTickSound || selectedTickSound;
+      let soundType: 'kitchen' | 'classic' | 'pendulum' = 'kitchen';
+      if (rawType === 'classic') soundType = 'classic';
+      else if (rawType === 'pendulum' || rawType === 'noise') soundType = 'pendulum';
+      else soundType = 'kitchen'; // 'kitchen-audio', 'kitchen' o 'wood'
+
+      const audioBuffer = getMechanicalClockBuffer(audioCtx, soundType, isEven);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+
       const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(Math.min(1.0, 0.98 * soundVolume), audioCtx.currentTime);
+      source.connect(gain);
       gain.connect(audioCtx.destination);
 
-      if (selectedTickSound === 'classic') {
-        const osc = audioCtx.createOscillator();
-        osc.connect(gain);
-        osc.type = 'sine';
-        
-        // Safari fixes: assign direct values and schedule with offset
-        osc.frequency.value = isEven ? 1600 : 1200;
-        osc.frequency.setValueAtTime(isEven ? 1600 : 1200, now);
-        
-        const tickVolume = 0.08 * soundVolume;
-        gain.gain.value = tickVolume;
-        gain.gain.setValueAtTime(tickVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
-        
-        osc.start(now);
-        osc.stop(now + 0.04);
-      } else if (selectedTickSound === 'wood') {
-        const osc = audioCtx.createOscillator();
-        osc.connect(gain);
-        osc.type = 'triangle';
-        
-        osc.frequency.value = isEven ? 800 : 600;
-        osc.frequency.setValueAtTime(isEven ? 800 : 600, now);
-        
-        const tickVolume = 0.15 * soundVolume;
-        gain.gain.value = tickVolume;
-        gain.gain.setValueAtTime(tickVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.015);
-        
-        osc.start(now);
-        osc.stop(now + 0.02);
-      } else if (selectedTickSound === 'noise') {
-        const bufferSize = audioCtx.sampleRate * 0.02;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = Math.random() * 2 - 1;
-        }
-        
-        const noiseNode = audioCtx.createBufferSource();
-        noiseNode.buffer = buffer;
-
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'highpass';
-        
-        filter.frequency.value = isEven ? 3500 : 2500;
-        filter.frequency.setValueAtTime(isEven ? 3500 : 2500, now);
-
-        noiseNode.connect(filter);
-        filter.connect(gain);
-
-        const tickVolume = 0.12 * soundVolume;
-        gain.gain.value = tickVolume;
-        gain.gain.setValueAtTime(tickVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
-
-        noiseNode.start(now);
-        noiseNode.stop(now + 0.025);
-      }
+      source.start(audioCtx.currentTime + 0.005);
     } catch (e) {
       console.error("Tick-tock sound failed", e);
     }
+  };
+
+  const testTickTockSound = (type?: 'kitchen-audio' | 'kitchen' | 'classic' | 'pendulum' | 'wood' | 'noise') => {
+    const t = type || selectedTickSound;
+    if (t === 'kitchen-audio') {
+      if (!loopAudioRef.current && typeof window !== 'undefined') {
+        const audio = new Audio('/sounds/timer-ticking.mp3');
+        audio.loop = true;
+        loopAudioRef.current = audio;
+      }
+      const audio = loopAudioRef.current;
+      if (audio) {
+        audio.volume = Math.min(1.0, Math.max(0, soundVolume));
+        audio.currentTime = 0;
+        audio.play().catch(e => console.warn("Preview audio play failed", e));
+        setTimeout(() => {
+          if (!stateRef.current.timerRunning || !stateRef.current.enableTickTock || stateRef.current.selectedTickSound !== 'kitchen-audio') {
+            audio.pause();
+          }
+        }, 3500);
+      }
+      return;
+    }
+    initAudio();
+    playTickTock(true, t);
+    setTimeout(() => {
+      playTickTock(false, t);
+    }, 240);
   };
 
   const requestNotificationPermission = async () => {
@@ -621,41 +771,81 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     }
   };
 
-  const playAlertSound = () => {
+  const playAlertSound = (overrideSound?: 'chime' | 'bell' | 'digital') => {
     if (!shouldPlayAudio()) return;
+    initAudio();
     if (!audioCtxRef.current || audioCtxRef.current.state === 'suspended') {
       return;
     }
     try {
       const audioCtx = audioCtxRef.current;
-      const playTone = (freq: number, type: OscillatorType, start: number, duration: number, volStart: number) => {
+      const soundType = overrideSound || selectedSound;
+
+      const playTone = (
+        freq: number,
+        type: OscillatorType,
+        start: number,
+        duration: number,
+        volStart: number,
+        sustainMs: number = 80
+      ) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        
+
         osc.type = type;
         osc.frequency.value = freq;
         osc.frequency.setValueAtTime(freq, start);
-        gain.gain.value = volStart * soundVolume;
-        gain.gain.setValueAtTime(volStart * soundVolume, start);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-        
+
+        const targetVol = Math.min(1.0, Math.max(0.001, volStart * soundVolume));
+        const attackTime = 0.015;
+        const sustainTime = Math.max(0.02, sustainMs / 1000);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(targetVol, start + attackTime);
+        gain.gain.setValueAtTime(targetVol, start + attackTime + sustainTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
         osc.start(start);
         osc.stop(start + duration);
       };
 
-      const now = audioCtx.currentTime + 0.05; // 50ms buffer for Safari scheduler
-      if (selectedSound === 'chime') {
-        playTone(880, 'sine', now, 0.5, 0.4);
-        playTone(1200, 'sine', now + 0.15, 0.7, 0.4);
-      } else if (selectedSound === 'bell') {
-        const freqs = [440, 554, 659, 880, 1200];
-        freqs.forEach((f) => playTone(f, 'triangle', now, 1.4, 0.2));
-      } else if (selectedSound === 'digital') {
-        playTone(2000, 'square', now, 0.12, 0.3);
-        playTone(2000, 'square', now + 0.15, 0.12, 0.3);
-        playTone(2000, 'square', now + 0.3, 0.12, 0.3);
+      const now = audioCtx.currentTime + 0.03;
+
+      if (soundType === 'chime') {
+        // Melodía de carillón de 4 notas ascendente, brillante y con excelente presencia
+        // C6 (1046.5 Hz), E6 (1318.5 Hz), G6 (1568 Hz), C7 (2093 Hz)
+        const notes = [
+          { f: 1046.5, t: 0.00, d: 0.35, v: 0.85 },
+          { f: 1318.5, t: 0.16, d: 0.40, v: 0.90 },
+          { f: 1568.0, t: 0.32, d: 0.45, v: 0.95 },
+          { f: 2093.0, t: 0.48, d: 0.85, v: 1.00 }
+        ];
+        notes.forEach(n => {
+          playTone(n.f, 'triangle', now + n.t, n.d, n.v, 100);
+          playTone(n.f, 'sine', now + n.t, n.d, n.v * 0.7, 100);
+        });
+      } else if (soundType === 'bell') {
+        // Campana resonante doble con armónicos potentes y ricos
+        [0.0, 0.45].forEach(offset => {
+          const freqs = [
+            { f: 587.33, v: 0.90, d: 0.9 }, // D5
+            { f: 880.00, v: 0.95, d: 0.8 }, // A5
+            { f: 1174.66, v: 0.75, d: 0.7 }, // D6
+            { f: 1760.00, v: 0.50, d: 0.6 }  // A6
+          ];
+          freqs.forEach(item => {
+            playTone(item.f, 'triangle', now + offset, item.d, item.v, 80);
+            playTone(item.f, 'sine', now + offset, item.d, item.v * 0.6, 80);
+          });
+        });
+      } else if (soundType === 'digital') {
+        // Alarma digital estilo reloj (doble ráfaga triple: pip-pip-pip ... pip-pip-pip)
+        const beeps = [0.0, 0.11, 0.22, 0.50, 0.61, 0.72];
+        beeps.forEach(t => {
+          playTone(2093, 'square', now + t, 0.08, 0.90, 40);
+        });
       }
     } catch (e) {
       console.error("Audio Context failed", e);
@@ -690,7 +880,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       interval = setInterval(() => {
         setTimeLeft(t => {
           const next = t - 1;
-          if (enableTickTock && next >= 0) {
+          if (enableTickTock && next >= 0 && selectedTickSound !== 'kitchen-audio') {
             playTickTock(next % 2 === 0);
           }
           return next;
@@ -1178,37 +1368,90 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
                 {enableTickTock && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                     <span style={{ fontSize: '0.75rem' }}>Tipo de tictac:</span>
-                    <select 
-                      value={selectedTickSound} 
-                      onChange={(e) => setSelectedTickSound(e.target.value as any)}
-                      style={{ padding: '4px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
-                    >
-                      <option value="classic">Clásico</option>
-                      <option value="wood">Madera</option>
-                      <option value="noise">Moderno</option>
-                    </select>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <select 
+                        value={selectedTickSound} 
+                        onChange={(e) => {
+                          const nextTick = e.target.value as any;
+                          setSelectedTickSound(nextTick);
+                          testTickTockSound(nextTick);
+                        }}
+                        style={{ padding: '4px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
+                      >
+                        <option value="kitchen-audio">Reloj de Cocina (Audio Real)</option>
+                        <option value="kitchen">Timer de Cocina (Mecánico)</option>
+                        <option value="classic">Reloj de Cuerda (Cronómetro)</option>
+                        <option value="pendulum">Reloj de Péndulo (Pared)</option>
+                        <option value="wood" style={{ display: 'none' }}>Madera (Timer de Cocina)</option>
+                        <option value="noise" style={{ display: 'none' }}>Moderno (Reloj de Péndulo)</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => testTickTockSound(selectedTickSound)}
+                        title="Probar sonido de tictac"
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-mantle)',
+                          color: 'var(--text-main)',
+                          cursor: 'pointer',
+                          fontSize: '0.72rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        🔊 Probar
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* End Cycle Alert Sound Selection */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <span style={{ fontSize: '0.75rem' }}>Sonido fin de ciclo:</span>
-                  <select 
-                    value={selectedSound} 
-                    onChange={(e) => setSelectedSound(e.target.value as any)}
-                    style={{ padding: '4px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
-                  >
-                    <option value="chime">Chime</option>
-                    <option value="bell">Campana</option>
-                    <option value="digital">Digital</option>
-                  </select>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <select 
+                      value={selectedSound} 
+                      onChange={(e) => {
+                        const nextSound = e.target.value as any;
+                        setSelectedSound(nextSound);
+                        initAudio();
+                        playAlertSound(nextSound);
+                      }}
+                      style={{ padding: '4px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-mantle)', color: 'var(--text)', fontSize: '0.75rem' }}
+                    >
+                      <option value="chime">Chime (Carillón)</option>
+                      <option value="bell">Campana</option>
+                      <option value="digital">Digital (Alarma)</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        initAudio();
+                        playAlertSound(selectedSound);
+                      }}
+                      title="Probar volumen y sonido"
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        background: 'var(--bg-mantle)',
+                        color: 'var(--text-main)',
+                        cursor: 'pointer',
+                        fontSize: '0.72rem',
+                        fontWeight: 600
+                      }}
+                    >
+                      🔊 Probar
+                    </button>
+                  </div>
                 </div>
 
                 {/* Volume Control */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                     <span>Volumen:</span>
-                    <span>{Math.round(soundVolume * 100)}%</span>
+                    <span style={{ fontWeight: 600 }}>{Math.round(soundVolume * 100)}%</span>
                   </div>
                   <input 
                     type="range" 
@@ -1220,19 +1463,12 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
                       const vol = parseFloat(e.target.value);
                       setSoundVolume(vol);
                       initAudio();
-                      try {
-                        const ctx = audioCtxRef.current;
-                        if (ctx && ctx.state === 'running') {
-                          const osc = ctx.createOscillator();
-                          const gain = ctx.createGain();
-                          osc.connect(gain);
-                          gain.connect(ctx.destination);
-                          osc.frequency.setValueAtTime(600, ctx.currentTime);
-                          gain.gain.setValueAtTime(0.08 * vol, ctx.currentTime);
-                          osc.start();
-                          osc.stop(ctx.currentTime + 0.08);
-                        }
-                      } catch(err) {}
+                    }}
+                    onMouseUp={() => {
+                      playAlertSound(selectedSound);
+                    }}
+                    onTouchEnd={() => {
+                      playAlertSound(selectedSound);
                     }}
                     style={{ accentColor: 'var(--color-proyecto)' }}
                   />
