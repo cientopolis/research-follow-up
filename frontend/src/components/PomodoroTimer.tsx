@@ -668,10 +668,13 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
       const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
       const seconds = (timeLeft % 60).toString().padStart(2, '0');
       const emoji = pomodoroMode === 'work' ? '🍅' : '🍃';
-      document.title = `(${minutes}:${seconds}) ${emoji} Pomodoro`;
+      document.title = `(${minutes}:${seconds}) ${emoji} DireAtento`;
     } else {
-      document.title = "Pomodoro Timer";
+      document.title = "DireAtento";
     }
+    return () => {
+      document.title = "DireAtento";
+    };
   }, [timeLeft, timerRunning, pomodoroMode]);
 
   // Request notification permission on mount if available

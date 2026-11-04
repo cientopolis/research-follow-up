@@ -66,4 +66,18 @@ describe('PomodoroTimer Component Tests', () => {
     // Check that warning does NOT appear
     expect(screen.queryByText(/Debes seleccionar una tarea activa/i)).not.toBeInTheDocument()
   })
+
+  it('debe establecer el título de la pestaña del navegador en DireAtento y no Pomodoro Timer', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: { bindings: [] }, success: true }),
+    })
+    global.fetch = mockFetch
+
+    render(<PomodoroTimer showCloseButton={false} />)
+
+    await waitFor(() => {
+      expect(document.title).toBe('DireAtento')
+      expect(document.title).not.toContain('Pomodoro Timer')
+    })
+  })
 })
