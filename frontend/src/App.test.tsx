@@ -1059,4 +1059,227 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getAllByText(/✓ Ana Tesista/i).length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it('debe permitir abrir la Consola SPARQL, estirar la barra con el mouse y visualizar resultados en múltiples formatos (Tabla, JSON, CSV, TSV)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT ?s ?p ?o')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            head: { vars: ['s', 'p', 'o'] },
+            results: {
+              bindings: [
+                {
+                  s: { type: 'uri', value: 'http://cientopolis.org/rfu/Investigador1' },
+                  p: { type: 'uri', value: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' },
+                  o: { type: 'literal', value: 'Investigador Principal' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Abrir la consola SPARQL
+    const sparqlBtn = await screen.findByRole('button', { name: /Consola SPARQL/i });
+    expect(sparqlBtn).toBeInTheDocument();
+    fireEvent.click(sparqlBtn);
+
+    // Verificar que la barra semántica está abierta y muestra el título
+    const sidebar = document.getElementById('sidebarSemantic');
+    expect(sidebar).toBeInTheDocument();
+    expect(sidebar).not.toHaveClass('collapsed');
+    expect(screen.getByText(/Consola SPARQL/i)).toBeInTheDocument();
+
+    // Verificar que existe el handle de estiramiento (resize handle)
+    const resizeHandle = sidebar?.querySelector('.sidebar-resize-handle');
+    expect(resizeHandle).toBeInTheDocument();
+
+    // Simular arrastre del borde izquierdo para estirar la barra
+    if (resizeHandle) {
+      fireEvent.mouseDown(resizeHandle, { clientX: 700 });
+      fireEvent.mouseMove(window, { clientX: 400 });
+      fireEvent.mouseUp(window);
+    }
+
+    // Verificar textarea de la consulta SPARQL
+    const sparqlInput = sidebar?.querySelector('.sparql-input') as HTMLTextAreaElement;
+    expect(sparqlInput).toBeInTheDocument();
+
+    // Ejecutar consulta SPARQL
+    const executeBtn = screen.getByRole('button', { name: /Ejecutar Consulta/i });
+    fireEvent.click(executeBtn);
+
+    // Esperar y verificar que los resultados se muestren en formato Tabla por defecto
+    await waitFor(() => {
+      expect(screen.getByText(/1 resultado encontrado/i)).toBeInTheDocument();
+      expect(screen.getByText('?s')).toBeInTheDocument();
+      expect(screen.getByText('?p')).toBeInTheDocument();
+      expect(screen.getByText('?o')).toBeInTheDocument();
+      expect(screen.getByText('rfu:Investigador1')).toBeInTheDocument();
+      expect(screen.getByText('rdf:type')).toBeInTheDocument();
+      expect(screen.getByText('Investigador Principal')).toBeInTheDocument();
+    });
+
+    // Probar formato JSON
+    const jsonBtn = screen.getByRole('button', { name: /📄 JSON/i });
+    fireEvent.click(jsonBtn);
+    expect(screen.getByText(/Investigador Principal/i)).toBeInTheDocument();
+
+    // Probar formato CSV
+    const csvBtn = screen.getByRole('button', { name: /📑 CSV/i });
+    fireEvent.click(csvBtn);
+    expect(screen.getByText(/"s","p","o"/i)).toBeInTheDocument();
+
+    // Probar formato TSV
+    const tsvBtn = screen.getByRole('button', { name: /📝 TSV/i });
+    fireEvent.click(tsvBtn);
+    const preOutput = sidebar?.querySelector('.sparql-pre-output');
+    expect(preOutput?.textContent).toContain('?s\t?p\t?o');
+    expect(preOutput?.textContent).toContain('<http://cientopolis.org/rfu/Investigador1>');
+
+    // Volver a formato Tabla
+    const tableBtn = screen.getByRole('button', { name: /📊 Tabla/i });
+    fireEvent.click(tableBtn);
+    expect(screen.getByText('rfu:Investigador1')).toBeInTheDocument();
+  });
+
+  it('debe detectar relaciones bidireccionales, permitir invertir la dirección y eliminar en ambos sentidos', async () => {
+    let updateQueriesSent: string[] = [];
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
+                  label: { value: 'Diego Torres' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' },
+                  type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                  label: { value: 'Carine Breidy' },
+                  x: { value: '400' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('SELECT DISTINCT ?from ?predicate ?to')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  from: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  predicate: { value: 'http://vivoweb.org/ontology/core#advisor' },
+                  to: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' }
+                },
+                {
+                  from: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' },
+                  predicate: { value: 'http://vivoweb.org/ontology/core#advisor' },
+                  to: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('DELETE DATA') || query.includes('INSERT DATA')) {
+        updateQueriesSent.push(query);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Esperar a que se rendericen los nodos
+    await waitFor(() => {
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+    });
+
+    // Abrir inspector del conector vivo:advisor
+    const advisorLabels = screen.getAllByText('vivo:advisor');
+    expect(advisorLabels.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(advisorLabels[0]);
+
+    // Verificar que el inspector muestra el banner de relación bidireccional y los botones
+    await waitFor(() => {
+      expect(screen.getByText(/Relación bidireccional detectada/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /🔄 Invertir Dirección/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /🗑️ Eliminar en ambos sentidos/i })).toBeInTheDocument();
+    });
+
+    // Probar Invertir Dirección
+    const invertBtn = screen.getByRole('button', { name: /🔄 Invertir Dirección/i });
+    fireEvent.click(invertBtn);
+
+    await waitFor(() => {
+      expect(updateQueriesSent.some(q => q.includes('INSERT DATA') && q.includes('DELETE DATA'))).toBe(true);
+    });
+
+    // Volver a abrir el inspector y probar Eliminar en ambos sentidos
+    fireEvent.click(advisorLabels[0]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /🗑️ Eliminar en ambos sentidos/i })).toBeInTheDocument();
+    });
+
+    const deleteBothBtn = screen.getByRole('button', { name: /🗑️ Eliminar en ambos sentidos/i });
+    fireEvent.click(deleteBothBtn);
+
+    await waitFor(() => {
+      expect(updateQueriesSent.some(q => 
+        q.includes('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres> <http://vivoweb.org/ontology/core#advisor> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy>') &&
+        q.includes('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy> <http://vivoweb.org/ontology/core#advisor> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres>')
+      )).toBe(true);
+    });
+  });
 });

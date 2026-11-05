@@ -276,8 +276,9 @@ export default function App() {
   const [editingPredicate, setEditingPredicate] = useState<string>('');
   const [isSavingPredicate, setIsSavingPredicate] = useState(false);
   const [isDeletingConnection, setIsDeletingConnection] = useState(false);
+  const [isInvertingConnection, setIsInvertingConnection] = useState(false);
 
-  // SPARQL console
+  // SPARQL console & resizable sidebar
   const [sparqlQuery, setSparqlQuery] = useState(`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX vivo: <http://vivoweb.org/ontology/core#>
@@ -287,7 +288,68 @@ SELECT ?s ?p ?o WHERE {
   ?s ?p ?o .
 } LIMIT 10`);
   const [sparqlResult, setSparqlResult] = useState<string>('');
+  const [sparqlRawData, setSparqlRawData] = useState<any>(null);
+  const [sparqlResultFormat, setSparqlResultFormat] = useState<'table' | 'json' | 'csv' | 'tsv'>('table');
+  const [sparqlLoading, setSparqlLoading] = useState(false);
+  const [sparqlError, setSparqlError] = useState<string | null>(null);
+  const [copiedFormat, setCopiedFormat] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<'none' | 'sparql' | 'pomodoro'>('none');
+
+  // Resizable SPARQL Sidebar state (#sidebarSemantic)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar_semantic_width');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 320) {
+          return Math.min(parsed, window.innerWidth - 40);
+        }
+      }
+    }
+    return 520;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const minWidth = 320;
+      const maxWidth = Math.max(minWidth, window.innerWidth - 40);
+      const calculatedWidth = window.innerWidth - e.clientX;
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+      setSidebarWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        setIsResizingSidebar(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setSidebarWidth(currentWidth => {
+          localStorage.setItem('sidebar_semantic_width', currentWidth.toString());
+          return currentWidth;
+        });
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleStartResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizingRef.current = true;
+    setIsResizingSidebar(true);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   // Mindmap Modal state
   const [showMindmapModal, setShowMindmapModal] = useState(false);
@@ -1285,18 +1347,157 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
+  // Helper functions for SPARQL query result formatting
+  const shortenUri = (uri: string): string => {
+    if (!uri || typeof uri !== 'string') return '';
+    const prefixes: [string, string][] = [
+      ['http://www.w3.org/1999/02/22-rdf-syntax-ns#', 'rdf:'],
+      ['http://www.w3.org/2000/01/rdf-schema#', 'rdfs:'],
+      ['http://www.w3.org/2002/07/owl#', 'owl:'],
+      ['http://www.w3.org/2001/XMLSchema#', 'xsd:'],
+      ['http://purl.org/dc/terms/', 'dcterms:'],
+      ['http://vivoweb.org/ontology/core#', 'vivo:'],
+      ['https://dblp.org/rdf/schema#', 'dblp:'],
+      ['http://cientopolis.org/rfu/', 'rfu:'],
+      ['http://www.semanticdesktop.org/ontologies/2008/05/20/tmo#', 'tmo:'],
+      ['http://schema.org/', 'schema:'],
+    ];
+    for (const [full, prefix] of prefixes) {
+      if (uri.startsWith(full)) {
+        return prefix + uri.slice(full.length);
+      }
+    }
+    return uri;
+  };
+
+  const convertSparqlToCSV = (data: any): string => {
+    if (!data || !data.results || !data.results.bindings) {
+      return typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data || '');
+    }
+    const vars: string[] = data.head?.vars || Object.keys(data.results.bindings[0] || {});
+    const header = vars.map(v => `"${v.replace(/"/g, '""')}"`).join(',');
+    const rows = data.results.bindings.map((b: any) =>
+      vars.map(v => {
+        const val = b[v]?.value ?? '';
+        return `"${String(val).replace(/"/g, '""')}"`;
+      }).join(',')
+    );
+    return [header, ...rows].join('\n');
+  };
+
+  const convertSparqlToTSV = (data: any): string => {
+    if (!data || !data.results || !data.results.bindings) {
+      return typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data || '');
+    }
+    const vars: string[] = data.head?.vars || Object.keys(data.results.bindings[0] || {});
+    const header = vars.map(v => `?${v}`).join('\t');
+    const rows = data.results.bindings.map((b: any) =>
+      vars.map(v => {
+        const cell = b[v];
+        if (!cell) return '';
+        if (cell.type === 'uri') return `<${cell.value}>`;
+        if (cell.type === 'literal') {
+          let lit = `"${cell.value.replace(/\\/g, '\\\\').replace(/\t/g, '\\t').replace(/\n/g, '\\n')}"`;
+          if (cell['xml:lang']) lit += `@${cell['xml:lang']}`;
+          else if (cell.datatype) lit += `^^<${cell.datatype}>`;
+          return lit;
+        }
+        return cell.value ?? '';
+      }).join('\t')
+    );
+    return [header, ...rows].join('\n');
+  };
+
+  const copySparqlResult = () => {
+    let text = '';
+    if (sparqlResultFormat === 'table') {
+      text = convertSparqlToTSV(sparqlRawData);
+    } else if (sparqlResultFormat === 'csv') {
+      text = convertSparqlToCSV(sparqlRawData);
+    } else if (sparqlResultFormat === 'tsv') {
+      text = convertSparqlToTSV(sparqlRawData);
+    } else {
+      text = sparqlRawData ? JSON.stringify(sparqlRawData, null, 2) : sparqlResult;
+    }
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedFormat(true);
+      setTimeout(() => setCopiedFormat(false), 2000);
+    }
+  };
+
+  const renderTableCell = (cell: any) => {
+    if (!cell) {
+      return <span style={{ color: '#94a3b8' }}>-</span>;
+    }
+    if (cell.type === 'uri') {
+      const shortened = shortenUri(cell.value);
+      return (
+        <span 
+          title={cell.value} 
+          style={{ 
+            color: '#000000', 
+            fontFamily: 'monospace',
+            fontWeight: shortened !== cell.value ? 600 : 400 
+          }}
+        >
+          {shortened}
+        </span>
+      );
+    }
+    if (cell.type === 'literal') {
+      return (
+        <span style={{ color: '#000000' }}>
+          {cell.value}
+          {cell['xml:lang'] && (
+            <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: '4px' }}>
+              @{cell['xml:lang']}
+            </span>
+          )}
+          {cell.datatype && (
+            <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: '4px' }}>
+              ^^{shortenUri(cell.datatype)}
+            </span>
+          )}
+        </span>
+      );
+    }
+    return <span style={{ color: '#000000' }}>{cell.value}</span>;
+  };
+
   // Run custom SPARQL Query
   const runCustomSPARQL = async () => {
+    setSparqlLoading(true);
+    setSparqlError(null);
     try {
       const response = await fetchWithAuth('/api/sparql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: sparqlQuery })
       });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData.details || errData.error || `Error HTTP ${response.status}`;
+        setSparqlError(msg);
+        setSparqlRawData(null);
+        setSparqlResult("Error: " + msg);
+        return;
+      }
       const data = await response.json();
+      setSparqlRawData(data);
       setSparqlResult(JSON.stringify(data, null, 2));
+      if (data?.results?.bindings) {
+        setSparqlResultFormat('table');
+      } else {
+        setSparqlResultFormat('json');
+      }
     } catch (e: any) {
-      setSparqlResult("Error: " + e.message);
+      const msg = e.message || 'Error desconocido';
+      setSparqlError(msg);
+      setSparqlRawData(null);
+      setSparqlResult("Error: " + msg);
+    } finally {
+      setSparqlLoading(false);
     }
   };
 
@@ -1794,6 +1995,68 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
+  // Invert direction of an existing connection (Sujeto <-> Objeto)
+  const invertConnectionDirection = async () => {
+    if (!selectedConnection) return;
+    setIsInvertingConnection(true);
+    const invertQuery = `
+      DELETE DATA {
+        <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
+      } ;
+      INSERT DATA {
+        <${selectedConnection.to}> <${selectedConnection.predicate}> <${selectedConnection.from}> .
+      }
+    `;
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: invertQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedConnection(null);
+        setIsInspectorOpen(false);
+        setEditingPredicate('');
+        await fetchGraphData();
+      }
+    } catch (e) {
+      console.error('Error al invertir dirección de la relación', e);
+    } finally {
+      setIsInvertingConnection(false);
+    }
+  };
+
+  // Delete both directions if a reciprocal relation exists (A -> B and B -> A)
+  const deleteBothDirections = async () => {
+    if (!selectedConnection) return;
+    setIsDeletingConnection(true);
+    const deleteBothQuery = `
+      DELETE DATA {
+        <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
+        <${selectedConnection.to}> <${selectedConnection.predicate}> <${selectedConnection.from}> .
+      }
+    `;
+    try {
+      const res = await fetchWithAuth('/api/sparql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: deleteBothQuery })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedConnection(null);
+        setIsInspectorOpen(false);
+        setEditingPredicate('');
+        await fetchGraphData();
+      }
+    } catch (e) {
+      console.error('Error al eliminar relación en ambos sentidos', e);
+    } finally {
+      setIsDeletingConnection(false);
+    }
+  };
+
   // Create Connection
   const createConnection = async (sourceURI: string, targetURI: string) => {
     const sourceNode = nodes.find(n => n.uri === sourceURI);
@@ -2281,20 +2544,6 @@ SELECT ?s ?p ?o WHERE {
                 
                 let fromHeight = hFrom;
                 let toHeight = hTo;
-
-                // Invert visually for vivo:advisor if student -> faculty
-                if (conn.predicate === 'http://vivoweb.org/ontology/core#advisor') {
-                  const isFromStudent = fromNode.type.includes('Student') || fromNode.type.includes('GraduateStudent') || fromNode.type.includes('UndergraduateStudent');
-                  const isToFaculty = toNode.type.includes('FacultyMember');
-                  if (isFromStudent && isToFaculty) {
-                    cx1 = toNode.x + 110;
-                    cy1 = toNode.y + hTo / 2;
-                    cx2 = fromNode.x + 110;
-                    cy2 = fromNode.y + hFrom / 2;
-                    fromHeight = hTo;
-                    toHeight = hFrom;
-                  }
-                }
 
                 // Border Intersections (w = 220)
                 const startPt = getCardBorderPoint(cx1, cy1, cx2, cy2, 220, fromHeight);
@@ -3313,24 +3562,63 @@ SELECT ?s ?p ?o WHERE {
                     <input type="text" value={getCleanLabel(selectedConnection.to)} readOnly style={{ cursor: 'default', opacity: 0.75 }} />
                   </div>
 
-                  <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                    <button
-                      id="btnEliminarRelacion"
-                      className="btn"
-                      onClick={deleteConnection}
-                      disabled={isDeletingConnection || isSavingPredicate}
-                      style={{ color: '#d20f39', borderColor: '#d20f39' }}
-                    >
-                      {isDeletingConnection ? '⏳ Eliminando...' : '🗑️ Eliminar Relación'}
-                    </button>
+                  {/* Advertencia si existe relación bidireccional recíproca */}
+                  {connections.some(c => c.from === selectedConnection.to && c.to === selectedConnection.from && c.predicate === selectedConnection.predicate) && (
+                    <div style={{
+                      padding: '10px 12px',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid #f59e0b',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      color: '#b45309',
+                      marginTop: '6px'
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: '2px' }}>⚠️ Relación bidireccional detectada</div>
+                      <div>Esta propiedad también existe en el sentido contrario (<code>{getCleanLabel(selectedConnection.to)} → {getCleanLabel(selectedConnection.from)}</code>).</div>
+                      <button
+                        type="button"
+                        id="btnEliminarAmbosSentidos"
+                        className="btn btn-sm btn-secondary"
+                        onClick={deleteBothDirections}
+                        disabled={isDeletingConnection}
+                        style={{ marginTop: '8px', fontSize: '0.72rem', padding: '4px 8px', color: '#b45309', borderColor: '#f59e0b' }}
+                      >
+                        🗑️ Eliminar en ambos sentidos
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex-row flex-space" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        id="btnEliminarRelacion"
+                        className="btn"
+                        onClick={deleteConnection}
+                        disabled={isDeletingConnection || isSavingPredicate || isInvertingConnection}
+                        style={{ color: '#d20f39', borderColor: '#d20f39' }}
+                      >
+                        {isDeletingConnection ? '⏳ Eliminando...' : '🗑️ Eliminar Relación'}
+                      </button>
+                      <button
+                        id="btnInvertirDireccion"
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={invertConnectionDirection}
+                        disabled={isInvertingConnection || isDeletingConnection || isSavingPredicate}
+                        title="Intercambiar origen y destino (Sujeto ↔ Objeto)"
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {isInvertingConnection ? '⏳ Invirtiendo...' : '🔄 Invertir Dirección'}
+                      </button>
+                    </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="btn" onClick={() => { setSelectedConnection(null); setIsInspectorOpen(false); setEditingPredicate(''); }}>Cancelar</button>
                       <button
                         id="btnGuardarPredicado"
                         className="btn btn-primary"
                         onClick={saveConnectionPredicate}
-                        disabled={isSavingPredicate || isDeletingConnection || editingPredicate === selectedConnection.predicate}
-                        style={{ opacity: (isSavingPredicate || isDeletingConnection || editingPredicate === selectedConnection.predicate) ? 0.55 : 1, transition: 'opacity 0.2s' }}
+                        disabled={isSavingPredicate || isDeletingConnection || isInvertingConnection || editingPredicate === selectedConnection.predicate}
+                        style={{ opacity: (isSavingPredicate || isDeletingConnection || isInvertingConnection || editingPredicate === selectedConnection.predicate) ? 0.55 : 1, transition: 'opacity 0.2s' }}
                       >
                         {isSavingPredicate ? '⏳ Guardando...' : '💾 Guardar Predicado'}
                       </button>
@@ -4275,11 +4563,27 @@ SELECT ?s ?p ?o WHERE {
       )}
 
       {/* Semantic Sidebar */}
-      <div id="sidebarSemantic" className={activeRightPanel === 'sparql' ? '' : 'collapsed'}>
+      <div 
+        id="sidebarSemantic" 
+        className={activeRightPanel === 'sparql' ? '' : 'collapsed'}
+        style={{
+          width: `${sidebarWidth}px`,
+          maxWidth: '96vw',
+          transition: isResizingSidebar ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div
+          className={`sidebar-resize-handle ${isResizingSidebar ? 'active' : ''}`}
+          onMouseDown={handleStartResize}
+          title="Arrastrar para ajustar ancho de la barra"
+        />
         {isDev && <span className="dev-tag-badge">#sidebarSemantic</span>}
         <div className="sidebar-header">
-          <h2>Consola SPARQL</h2>
-          <button className="btn" onClick={() => setActiveRightPanel('none')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.05rem', color: '#000000' }}>Consola SPARQL</h2>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({sidebarWidth}px)</span>
+          </div>
+          <button className="btn btn-sm" onClick={() => setActiveRightPanel('none')}>
             Ocultar
           </button>
         </div>
@@ -4289,18 +4593,156 @@ SELECT ?s ?p ?o WHERE {
               className="sparql-input"
               value={sparqlQuery}
               onChange={(e) => setSparqlQuery(e.target.value)}
+              placeholder="Escribe tu consulta SPARQL aquí..."
+              spellCheck={false}
             />
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={runCustomSPARQL}>Ejecutar Consulta</button>
+            <button 
+              className="btn btn-primary" 
+              style={{ width: '100%', marginTop: '6px' }} 
+              onClick={runCustomSPARQL}
+              disabled={sparqlLoading}
+            >
+              {sparqlLoading ? 'Ejecutando consulta...' : 'Ejecutar Consulta'}
+            </button>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>RESULTADO</label>
-            <pre style={{
-              flex: 1, overflow: 'auto', background: 'var(--bg-crust)',
-              padding: '10px', borderRadius: '8px', fontSize: '0.75rem',
-              color: '#89b4fa', margin: 0
-            }}>
-              {sparqlResult || 'No se han ejecutado consultas aún.'}
-            </pre>
+
+          <div className="sparql-results-container">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+              <label style={{ fontSize: '0.75rem', color: '#000000', fontWeight: 700 }}>RESULTADO</label>
+
+              {/* Selector de formatos amigables con SPARQL */}
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button 
+                  className={`btn btn-sm ${sparqlResultFormat === 'table' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSparqlResultFormat('table')}
+                  style={{ fontSize: '0.7rem', padding: '3px 7px' }}
+                  title="Vista en tabla SPARQL interactiva"
+                >
+                  📊 Tabla
+                </button>
+                <button 
+                  className={`btn btn-sm ${sparqlResultFormat === 'json' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSparqlResultFormat('json')}
+                  style={{ fontSize: '0.7rem', padding: '3px 7px' }}
+                  title="Formato SPARQL JSON estándar"
+                >
+                  📄 JSON
+                </button>
+                <button 
+                  className={`btn btn-sm ${sparqlResultFormat === 'csv' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSparqlResultFormat('csv')}
+                  style={{ fontSize: '0.7rem', padding: '3px 7px' }}
+                  title="Valores separados por comas (CSV)"
+                >
+                  📑 CSV
+                </button>
+                <button 
+                  className={`btn btn-sm ${sparqlResultFormat === 'tsv' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSparqlResultFormat('tsv')}
+                  style={{ fontSize: '0.7rem', padding: '3px 7px' }}
+                  title="Formato W3C SPARQL TSV (Tab-separated)"
+                >
+                  📝 TSV
+                </button>
+                {(sparqlRawData || sparqlResult) && (
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    onClick={copySparqlResult}
+                    style={{ fontSize: '0.7rem', padding: '3px 7px', marginLeft: '4px' }}
+                    title="Copiar resultado al portapapeles"
+                  >
+                    {copiedFormat ? '✓ ¡Copiado!' : '📋 Copiar'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Salida de resultados */}
+            {sparqlError ? (
+              <div style={{
+                padding: '12px', background: '#fee2e2', border: '1px solid #f87171',
+                borderRadius: '8px', color: '#000000', fontSize: '0.8rem'
+              }}>
+                <div style={{ fontWeight: 'bold', color: '#dc2626', marginBottom: '4px' }}>Error en la ejecución SPARQL:</div>
+                <div style={{ color: '#000000', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{sparqlError}</div>
+              </div>
+            ) : !sparqlRawData && !sparqlResult ? (
+              <div style={{
+                padding: '16px', background: '#ffffff', border: '1px solid #cbd5e1',
+                borderRadius: '8px', color: '#000000', fontSize: '0.78rem'
+              }}>
+                No se han ejecutado consultas aún. Haz clic en "Ejecutar Consulta" para ver los resultados.
+              </div>
+            ) : sparqlResultFormat === 'table' && sparqlRawData?.results?.bindings ? (
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                <div style={{ fontSize: '0.72rem', color: '#000000', fontWeight: 600, marginBottom: '4px' }}>
+                  {sparqlRawData.results.bindings.length} {sparqlRawData.results.bindings.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}
+                </div>
+                {sparqlRawData.results.bindings.length === 0 ? (
+                  <div style={{ padding: '16px', color: '#000000', background: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem' }}>
+                    No se encontraron resultados (0 filas).
+                  </div>
+                ) : (
+                  <div className="sparql-table-wrapper">
+                    <table className="sparql-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                          {(sparqlRawData.head?.vars || Object.keys(sparqlRawData.results.bindings[0] || {})).map((v: string) => (
+                            <th key={v}>?{v}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sparqlRawData.results.bindings.map((binding: any, idx: number) => {
+                          const vars: string[] = sparqlRawData.head?.vars || Object.keys(sparqlRawData.results.bindings[0] || {});
+                          return (
+                            <tr key={idx}>
+                              <td style={{ textAlign: 'center', color: '#64748b', fontSize: '0.7rem' }}>{idx + 1}</td>
+                              {vars.map((v: string) => (
+                                <td key={v}>
+                                  {renderTableCell(binding[v])}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : sparqlResultFormat === 'table' && sparqlRawData?.boolean !== undefined ? (
+              <div style={{
+                padding: '16px', background: '#ffffff', border: '1px solid #cbd5e1',
+                borderRadius: '8px', color: '#000000', fontSize: '0.85rem'
+              }}>
+                <strong>Resultado consulta ASK: </strong>
+                <span style={{ color: sparqlRawData.boolean ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                  {sparqlRawData.boolean ? 'VERDADERO (true)' : 'FALSO (false)'}
+                </span>
+              </div>
+            ) : sparqlResultFormat === 'table' && sparqlRawData?.success !== undefined ? (
+              <div style={{
+                padding: '16px', background: '#ffffff', border: '1px solid #cbd5e1',
+                borderRadius: '8px', color: '#000000', fontSize: '0.82rem'
+              }}>
+                <div style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ Actualización SPARQL completada</div>
+                <div style={{ color: '#000000', marginTop: '4px' }}>{sparqlRawData.message || 'Operación exitosa.'}</div>
+              </div>
+            ) : sparqlResultFormat === 'csv' ? (
+              <pre className="sparql-pre-output">
+                {convertSparqlToCSV(sparqlRawData)}
+              </pre>
+            ) : sparqlResultFormat === 'tsv' ? (
+              <pre className="sparql-pre-output">
+                {convertSparqlToTSV(sparqlRawData)}
+              </pre>
+            ) : (
+              <pre className="sparql-pre-output">
+                {sparqlRawData ? JSON.stringify(sparqlRawData, null, 2) : sparqlResult}
+              </pre>
+            )}
           </div>
         </div>
       </div>

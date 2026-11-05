@@ -345,14 +345,16 @@ body, html, #root {
   position: absolute;
   top: 0;
   right: 0;
-  width: 320px;
+  width: 500px;
+  min-width: 320px;
+  max-width: 95vw;
   height: 100%;
   background: var(--bg-mantle);
   border-left: 1px solid var(--border-color);
   z-index: 90;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.25);
   transform: translateX(0);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -361,8 +363,37 @@ body, html, #root {
   transform: translateX(100%);
 }
 
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  left: -6px;
+  width: 12px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background-color 0.2s;
+}
+
+.sidebar-resize-handle:hover::before,
+.sidebar-resize-handle.active::before {
+  background-color: var(--color-proyecto, #C17F59);
+}
+
 .sidebar-header {
-  padding: 20px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
@@ -372,31 +403,114 @@ body, html, #root {
 .sidebar-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 /* SPARQL Console */
 .sparql-console {
-  background: var(--bg-crust);
+  background: #ffffff;
   border-radius: 8px;
   padding: 12px;
   border: 1px solid var(--border-color);
   font-family: monospace;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .sparql-input {
   width: 100%;
-  height: 150px;
-  background: transparent;
-  border: none;
-  color: #a6e3a1;
+  min-height: 160px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px;
+  color: #000000 !important;
   font-family: 'Fira Code', 'Courier New', Courier, monospace;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  font-weight: 500;
   resize: vertical;
   outline: none;
+  box-sizing: border-box;
+}
+
+.sparql-input:focus {
+  border-color: var(--color-proyecto, #C17F59);
+  box-shadow: 0 0 0 2px rgba(193, 127, 89, 0.2);
+}
+
+/* SPARQL Results */
+.sparql-results-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 250px;
+  overflow: hidden;
+}
+
+.sparql-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sparql-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  color: #000000;
+}
+
+.sparql-table th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  color: #000000;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.sparql-table td {
+  padding: 6px 10px;
+  color: #000000;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.sparql-table tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+.sparql-table tr:hover td {
+  background-color: #f1f5f9;
+}
+
+.sparql-pre-output {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  color: #000000 !important;
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  margin: 0;
+  white-space: pre;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 /* Modal Backdrop Overlay */
