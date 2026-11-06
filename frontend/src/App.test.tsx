@@ -6,6 +6,10 @@ import { auth } from './firebase';
 describe('App Canvas Component Tests', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    if (auth.currentUser) {
+      Object.defineProperty(auth.currentUser, 'email', { value: 'test@example.com', configurable: true });
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: {} });
+    }
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.clear();
     }
@@ -352,7 +356,7 @@ describe('App Canvas Component Tests', () => {
 
   it('debe permitir abrir el modal + Agregar Nodo sin errores en modo SuperAdmin', async () => {
     if (auth.currentUser) {
-      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
     }
 
     const fetchMock = vi.fn().mockImplementation((url, options) => {
@@ -408,7 +412,7 @@ describe('App Canvas Component Tests', () => {
 
   it('debe permitir a un SuperAdmin cambiar a la vista de Gestión del Catálogo y navegar entre categorías', async () => {
     if (auth.currentUser) {
-      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
     }
 
     const fetchMock = vi.fn().mockImplementation((url, options) => {
@@ -655,7 +659,7 @@ describe('App Canvas Component Tests', () => {
 
   it('debe permitir al SuperAdmin realizar la carga automática masiva de personas desde Memorias@LIFIA hacia GraphDB', async () => {
     if (auth.currentUser) {
-      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
     }
 
     let executedInsertSparql = '';
@@ -765,7 +769,7 @@ describe('App Canvas Component Tests', () => {
 
   it('debe permitir al SuperAdmin blanquear / resetear la base de datos confirmando con la palabra BLANQUEAR', async () => {
     if (auth.currentUser) {
-      Object.defineProperty(auth.currentUser, 'email', { value: 'admin@cientopolis.org', configurable: true });
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
     }
 
     let resetEndpointCalled = false;
@@ -1613,5 +1617,54 @@ describe('App Canvas Component Tests', () => {
     expect(canvasMain).toHaveAttribute('data-canvas-theme', 'warm-sepia');
     expect(localStorage.getItem('canvas_theme')).toBe('warm-sepia');
     expect(btnSelectorTema).toHaveTextContent('Manuscrito Sepia');
+  });
+
+  it('debe escapar correctamente comillas y barras invertidas al crear un nodo en SPARQL', async () => {
+    let capturedInsertQuery = '';
+    const fetchMock = vi.fn().mockImplementation((_url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          query = JSON.parse(options.body).query || '';
+        } catch (e) {}
+      }
+      if (query.includes('INSERT DATA')) {
+        capturedInsertQuery = query;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('+ Agregar Nodo'));
+
+    const createTab = screen.getByText('➕ Crear Nuevo Nodo');
+    fireEvent.click(createTab);
+
+    const nameInput = screen.getByPlaceholderText('Ej: IEEE ISWC 2026 o Journal of Web Semantics');
+    fireEvent.change(nameInput, { target: { value: 'Ana "la" \\ Pérez' } });
+
+    const suffixInput = screen.getByPlaceholderText('Ej: ISWC2026 o JWS');
+    fireEvent.change(suffixInput, { target: { value: 'AnaPerez' } });
+
+    const createBtn = screen.getByText('Crear y Registrar Nodo');
+    fireEvent.click(createBtn);
+
+    await waitFor(() => {
+      expect(capturedInsertQuery).toContain('rdfs:label "Ana \\"la\\" \\\\ Pérez"');
+    });
   });
 });

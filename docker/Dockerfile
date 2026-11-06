@@ -45,6 +45,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # Copiar servidor Express y scripts auxiliares
 COPY server.js ./
+COPY server/ ./server/
 COPY import_ontologies.py ./
 COPY ontologies/ ./ontologies/
 

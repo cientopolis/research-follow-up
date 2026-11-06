@@ -11,6 +11,7 @@ import { MindmapCanvas } from './components/MindmapCanvas';
 import { AdminUsersModal } from './components/AdminUsersModal';
 import { AdminCatalogPanel } from './components/AdminCatalogPanel';
 import { MeetingsPanel } from './components/MeetingsPanel';
+import { lit, iri, httpIri, num, isValidUriSuffix } from './utils/sparql';
 
 interface RDFNode {
   uri: string;
@@ -378,10 +379,10 @@ export default function App() {
       if (currentUser) {
         try {
           const tokenResult = await currentUser.getIdTokenResult(true);
-          const isAdminClaim = Boolean(tokenResult.claims.admin || tokenResult.claims.superadmin || currentUser.email === 'admin@cientopolis.org');
+          const isAdminClaim = Boolean(tokenResult?.claims?.admin || tokenResult?.claims?.superadmin);
           setIsSuperAdmin(isAdminClaim);
         } catch (e) {
-          setIsSuperAdmin(currentUser.email === 'admin@cientopolis.org');
+          setIsSuperAdmin(false);
         }
       } else {
         setIsSuperAdmin(false);
@@ -744,7 +745,7 @@ SELECT ?s ?p ?o WHERE {
 
       SELECT DISTINCT ?topic ?label WHERE {
         ?topic rdfs:label ?l .
-        FILTER(CONTAINS(LOWER(STR(?l)), "${term}"))
+        FILTER(CONTAINS(LOWER(STR(?l)), ${lit(term)}))
         BIND(STR(?l) AS ?label)
       } LIMIT 25
     `;
@@ -1114,7 +1115,6 @@ SELECT ?s ?p ?o WHERE {
     }
 
     const sessionUri = `${activeMeetingLogNode.uri}_session_${Date.now()}`;
-    const escapedNotes = newMeetingSessionForm.notes.trim().replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
     let insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -1123,8 +1123,8 @@ SELECT ?s ?p ?o WHERE {
       INSERT DATA {
         <${activeMeetingLogNode.uri}> rfu:hasSession <${sessionUri}> .
         <${sessionUri}> rdf:type rfu:MeetingSession ;
-                        rfu:sessionDate "${newMeetingSessionForm.date}" ;
-                        rfu:sessionNotes "${escapedNotes}" .
+                        rfu:sessionDate ${lit(newMeetingSessionForm.date)} ;
+                        rfu:sessionNotes ${lit(newMeetingSessionForm.notes.trim())} .
     `;
     newMeetingSessionForm.attendees.forEach(aUri => {
       insertQuery += `<${sessionUri}> rfu:attendedBy <${aUri}> .\n`;
@@ -1264,6 +1264,10 @@ SELECT ?s ?p ?o WHERE {
     if (!user || !label.trim() || !uriSuffix.trim()) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     const cleanSuffix = uriSuffix.trim().replace(/\s+/g, '');
+    if (!isValidUriSuffix(cleanSuffix)) {
+      alert("El sufijo de URI contiene caracteres no válidos. Usa solo letras, números, guiones o puntos.");
+      return;
+    }
     const nodeUri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${cleanSuffix}`;
     
     if (nodes.some(n => n.uri === nodeUri)) {
@@ -1272,7 +1276,7 @@ SELECT ?s ?p ?o WHERE {
     }
 
     const photoTriple = user.photoURL
-      ? `<${nodeUri}> <http://schema.org/image> "${user.photoURL.replace(/"/g, '\\"')}" .`
+      ? `${iri(nodeUri)} <http://schema.org/image> ${lit(user.photoURL)} .`
       : '';
 
     const query = `
@@ -1282,13 +1286,13 @@ SELECT ?s ?p ?o WHERE {
       PREFIX rfu: <http://cientopolis.org/rfu/>
 
       INSERT DATA {
-        <${nodeUri}> rdf:type <http://vivoweb.org/ontology/core#FacultyMember> ;
-                     rdfs:label "${label.trim()}" ;
+        ${iri(nodeUri)} rdf:type <http://vivoweb.org/ontology/core#FacultyMember> ;
+                     rdfs:label ${lit(label.trim())} ;
                      rfu:createdBy <${userUri}> ;
                      ex:posX "150" ;
                      ex:posY "150" .
         ${photoTriple}
-        <${userUri}> rfu:associatedResearcher <${nodeUri}> .
+        <${userUri}> rfu:associatedResearcher ${iri(nodeUri)} .
       }
     `;
 
@@ -1519,13 +1523,20 @@ SELECT ?s ?p ?o WHERE {
       ...Object.keys(nodeDetails).filter(k => !k.startsWith('http://www.w3.org/2000/01/rdf-schema#') && !preProps.some(p => p.uri === k))
     ];
 
-    const filterList = predicatesToClear.map(p => `<${p}>`).join(', ');
+    let filterList = '';
+    let insertTriples = '';
+    try {
+      filterList = predicatesToClear.map(p => iri(p)).join(', ');
 
-    // Filter nodeDetails to only insert non-empty values
-    const insertTriples = Object.entries(nodeDetails)
-      .filter(([_, val]) => val.trim() !== '')
-      .map(([pred, val]) => `<${selectedNode.uri}> <${pred}> "${val.replace(/"/g, '\\"')}" .`)
-      .join('\n        ');
+      // Filter nodeDetails to only insert non-empty values
+      insertTriples = Object.entries(nodeDetails)
+        .filter(([_, val]) => val.trim() !== '')
+        .map(([pred, val]) => `<${selectedNode.uri}> ${iri(pred)} ${lit(val)} .`)
+        .join('\n        ');
+    } catch (err: any) {
+      alert(err?.message || 'Error en el formato de una propiedad.');
+      return;
+    }
 
     const updateQuery = `
       DELETE {
@@ -1572,14 +1583,13 @@ SELECT ?s ?p ?o WHERE {
   };
 
   const saveNodeMindmap = async (targetNode: RDFNode, markdownContent: string) => {
-    const escMarkdown = markdownContent.replace(/"/g, '\\"').replace(/\n/g, '\\n');
     const updateQuery = `
       PREFIX rfu: <http://cientopolis.org/rfu/>
       DELETE {
         <${targetNode.uri}> rfu:hasMindmap ?m .
       }
       INSERT {
-        <${targetNode.uri}> rfu:hasMindmap "${escMarkdown}" .
+        <${targetNode.uri}> rfu:hasMindmap ${lit(markdownContent)} .
       }
       WHERE {
         OPTIONAL { <${targetNode.uri}> rfu:hasMindmap ?m }
@@ -1966,36 +1976,42 @@ SELECT ?s ?p ?o WHERE {
   const saveEditedCatalogNode = async () => {
     if (!editingCatalogNode || !isSuperAdmin) return;
 
-    let updateTriples = `
-      DELETE WHERE { <${editingCatalogNode.uri}> rdfs:label ?o . };
-      DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> ?o . };
-      DELETE WHERE { <${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?o . };
-      DELETE WHERE { <${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> ?o . };
-      DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> ?o . };
-      DELETE WHERE { <${editingCatalogNode.uri}> <http://schema.org/url> ?o . };
-      
-      INSERT DATA {
-        <${editingCatalogNode.uri}> rdfs:label "${editingCatalogNode.label}" .
-    `;
+    let updateTriples = '';
+    try {
+      updateTriples = `
+        DELETE WHERE { <${editingCatalogNode.uri}> rdfs:label ?o . };
+        DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> ?o . };
+        DELETE WHERE { <${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ?o . };
+        DELETE WHERE { <${editingCatalogNode.uri}> <http://example.org/resource/submissionDeadlineMonth> ?o . };
+        DELETE WHERE { <${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> ?o . };
+        DELETE WHERE { <${editingCatalogNode.uri}> <http://schema.org/url> ?o . };
+        
+        INSERT DATA {
+          <${editingCatalogNode.uri}> rdfs:label ${lit(editingCatalogNode.label)} .
+      `;
 
-    const isVenueType = editingCatalogNode.type === 'http://purl.org/ontology/bibo/Conference' || editingCatalogNode.type === 'http://purl.org/ontology/bibo/Journal';
+      const isVenueType = editingCatalogNode.type === 'http://purl.org/ontology/bibo/Conference' || editingCatalogNode.type === 'http://purl.org/ontology/bibo/Journal';
 
-    if (isVenueType) {
-      if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
-        updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> "${editingCatalogNode.rank.trim()}" .`;
+      if (isVenueType) {
+        if (editingCatalogNode.rank && editingCatalogNode.rank.trim()) {
+          updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/ontology/bibo/rank> ${lit(editingCatalogNode.rank.trim())} .`;
+        }
+        if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
+          updateTriples += `\n<${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ${lit(editingCatalogNode.deadlineMonth.trim())} .`;
+        }
       }
-      if (editingCatalogNode.deadlineMonth && editingCatalogNode.deadlineMonth.trim()) {
-        updateTriples += `\n<${editingCatalogNode.uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> "${editingCatalogNode.deadlineMonth.trim()}" .`;
+      if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> ${lit(editingCatalogNode.subject.trim())} .`;
       }
-    }
-    if (editingCatalogNode.subject && editingCatalogNode.subject.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://purl.org/dc/terms/subject> "${editingCatalogNode.subject.trim()}" .`;
-    }
-    if (editingCatalogNode.externalUrl && editingCatalogNode.externalUrl.trim()) {
-      updateTriples += `\n<${editingCatalogNode.uri}> <http://schema.org/url> <${editingCatalogNode.externalUrl.trim()}> .`;
-    }
+      if (editingCatalogNode.externalUrl && editingCatalogNode.externalUrl.trim()) {
+        updateTriples += `\n<${editingCatalogNode.uri}> <http://schema.org/url> ${httpIri(editingCatalogNode.externalUrl)} .`;
+      }
 
-    updateTriples += `\n}`;
+      updateTriples += `\n}`;
+    } catch (err: any) {
+      alert(err?.message || 'Error en los datos del nodo.');
+      return;
+    }
 
     try {
       const res = await fetchWithAuth('/api/sparql', {
@@ -2018,9 +2034,14 @@ SELECT ?s ?p ?o WHERE {
   const createNode = async () => {
     if (!newNodeData.label || !newNodeData.uriSuffix) return;
     if (!user) return;
+    const cleanSuffix = newNodeData.uriSuffix.trim();
+    if (!isValidUriSuffix(cleanSuffix)) {
+      alert("El sufijo de URI contiene caracteres no válidos. Usa solo letras, números, guiones o puntos.");
+      return;
+    }
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
     
-    const uri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${newNodeData.uriSuffix.trim()}`;
+    const uri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${cleanSuffix}`;
 
     // If triggered via quick-connect, place child node offset from parent
     let x: number;
@@ -2036,50 +2057,57 @@ SELECT ?s ?p ?o WHERE {
 
     let finalType = newNodeData.type;
     let extraTriples = '';
-    if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#PhD') {
-      finalType = 'http://purl.org/ontology/bibo/Thesis';
-      extraTriples = `<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "PhD Thesis" .`;
-    } else if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#Master') {
-      finalType = 'http://purl.org/ontology/bibo/Thesis';
-      extraTriples = `<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "Magister" .`;
-    }
-
-    if (newNodeData.externalUrl && newNodeData.externalUrl.trim()) {
-      extraTriples += `\n<${uri}> <http://schema.org/url> <${newNodeData.externalUrl.trim()}> .`;
-    }
-
-    if (newNodeData.photoUrl && newNodeData.photoUrl.trim()) {
-      extraTriples += `\n<${uri}> <http://schema.org/image> "${newNodeData.photoUrl.trim().replace(/"/g, '\\"')}" .`;
-    }
-
-    if (newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') {
-      if (newNodeData.rank && newNodeData.rank.trim()) {
-        extraTriples += `\n<${uri}> <http://purl.org/ontology/bibo/rank> "${newNodeData.rank.trim()}" .`;
+    let insertQuery = '';
+    try {
+      const nodeIri = iri(uri);
+      if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#PhD') {
+        finalType = 'http://purl.org/ontology/bibo/Thesis';
+        extraTriples = `${nodeIri} <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "PhD Thesis" .`;
+      } else if (newNodeData.type === 'http://purl.org/ontology/bibo/Thesis#Master') {
+        finalType = 'http://purl.org/ontology/bibo/Thesis';
+        extraTriples = `${nodeIri} <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/thesisType> "Magister" .`;
       }
-      if (newNodeData.deadlineMonth && newNodeData.deadlineMonth.trim()) {
-        extraTriples += `\n<${uri}> <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> "${newNodeData.deadlineMonth.trim()}" .`;
-      }
-      if (newNodeData.subject && newNodeData.subject.trim()) {
-        extraTriples += `\n<${uri}> <http://purl.org/dc/terms/subject> "${newNodeData.subject.trim()}" .`;
-      }
-    }
 
-    const insertQuery = `
-      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
-      PREFIX rfu: <http://cientopolis.org/rfu/>
-      PREFIX schema: <http://schema.org/>
-      
-      INSERT DATA {
-        <${uri}> rdf:type <${finalType}> ;
-                 rdfs:label "${newNodeData.label}" ;
-                 ex:posX ${x} ;
-                 ex:posY ${y} ;
-                 rfu:createdBy <${userUri}> .
-        ${extraTriples}
+      if (newNodeData.externalUrl && newNodeData.externalUrl.trim()) {
+        extraTriples += `\n${nodeIri} <http://schema.org/url> ${httpIri(newNodeData.externalUrl)} .`;
       }
-    `;
+
+      if (newNodeData.photoUrl && newNodeData.photoUrl.trim()) {
+        extraTriples += `\n${nodeIri} <http://schema.org/image> ${lit(newNodeData.photoUrl.trim())} .`;
+      }
+
+      if (newNodeData.type === 'http://purl.org/ontology/bibo/Conference' || newNodeData.type === 'http://purl.org/ontology/bibo/Journal') {
+        if (newNodeData.rank && newNodeData.rank.trim()) {
+          extraTriples += `\n${nodeIri} <http://purl.org/ontology/bibo/rank> ${lit(newNodeData.rank.trim())} .`;
+        }
+        if (newNodeData.deadlineMonth && newNodeData.deadlineMonth.trim()) {
+          extraTriples += `\n${nodeIri} <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/submissionDeadlineMonth> ${lit(newNodeData.deadlineMonth.trim())} .`;
+        }
+        if (newNodeData.subject && newNodeData.subject.trim()) {
+          extraTriples += `\n${nodeIri} <http://purl.org/dc/terms/subject> ${lit(newNodeData.subject.trim())} .`;
+        }
+      }
+
+      insertQuery = `
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
+        PREFIX rfu: <http://cientopolis.org/rfu/>
+        PREFIX schema: <http://schema.org/>
+        
+        INSERT DATA {
+          ${nodeIri} rdf:type ${iri(finalType)} ;
+                   rdfs:label ${lit(newNodeData.label)} ;
+                   ex:posX ${num(x)} ;
+                   ex:posY ${num(y)} ;
+                   rfu:createdBy <${userUri}> .
+          ${extraTriples}
+        }
+      `;
+    } catch (err: any) {
+      alert(err?.message || 'Error en los datos del nuevo nodo.');
+      return;
+    }
 
     try {
       const res = await fetchWithAuth('/api/sparql', {
@@ -2160,9 +2188,9 @@ SELECT ?s ?p ?o WHERE {
 
         INSERT DATA {
           <${roleUri}> a ${roleClass} ;
-                       rdfs:label "${roleLabel}" ;
-                       ex:posX "${midX}" ;
-                       ex:posY "${midY}" ;
+                       rdfs:label ${lit(roleLabel)} ;
+                       ex:posX ${lit(num(midX))} ;
+                       ex:posY ${lit(num(midY))} ;
                        obo:RO_0000052 <${personUri}> ;
                        obo:BFO_0000054 <${projectUri}> ;
                        rfu:createdBy <${userUri}> .

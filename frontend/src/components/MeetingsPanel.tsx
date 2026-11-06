@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { lit, iri, httpIri, num, isValidUriSuffix } from '../utils/sparql';
 
 export interface PersonOption {
   uri: string;
@@ -278,99 +279,109 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
 
     const userUri = `http://cientopolis.org/rfu/user/${userUid}`;
     const cleanSuffix = (formData.uriSuffix.trim() || formData.label.trim().replace(/[^a-zA-Z0-9_-]/g, '_')).replace(/\s+/g, '_');
+    if (!editingMeetingUri && !isValidUriSuffix(cleanSuffix)) {
+      alert('El sufijo de URI contiene caracteres no válidos. Usa solo letras, números, guiones o puntos.');
+      return;
+    }
     const meetingUri = editingMeetingUri || `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/Meeting_${cleanSuffix}`;
 
-    const escapedLabel = formData.label.trim().replace(/"/g, '\\"');
     const existingItem = meetings.find(m => m.uri === meetingUri);
     const posX = existingItem?.posX ?? Math.floor(Math.random() * 350 + 200);
     const posY = existingItem?.posY ?? Math.floor(Math.random() * 250 + 150);
 
-    let sparql = `
-      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX vivo: <http://vivoweb.org/ontology/core#>
-      PREFIX rfu: <http://cientopolis.org/rfu/>
-      PREFIX schema: <http://schema.org/>
-      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
-    `;
-
-    if (editingMeetingUri) {
-      sparql += `
-        DELETE WHERE {
-          <${meetingUri}> rdfs:label ?l .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:recurrenceType ?rt .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:frequency ?f .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:dayOfWeek ?dw .
-        };
-        DELETE WHERE {
-          <${meetingUri}> ex:startDate ?sd .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:meetingTime ?mt .
-        };
-        DELETE WHERE {
-          <${meetingUri}> schema:url ?u .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:minutesUrl ?mu .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:location ?loc .
-        };
-        DELETE WHERE {
-          <${meetingUri}> rfu:hasParticipant ?p .
-        };
+    let sparql = '';
+    try {
+      const meetingIri = iri(meetingUri);
+      sparql = `
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX vivo: <http://vivoweb.org/ontology/core#>
+        PREFIX rfu: <http://cientopolis.org/rfu/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
       `;
-    }
 
-    sparql += `
-      INSERT DATA {
-        <${meetingUri}> rdf:type vivo:Meeting ;
-                        rdfs:label "${escapedLabel}" ;
-                        rfu:createdBy <${userUri}> ;
-                        rfu:recurrenceType "${formData.recurrenceType}" ;
-                        rfu:meetingTime "${formData.time}" .
-    `;
+      if (editingMeetingUri) {
+        sparql += `
+          DELETE WHERE {
+            ${meetingIri} rdfs:label ?l .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:recurrenceType ?rt .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:frequency ?f .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:dayOfWeek ?dw .
+          };
+          DELETE WHERE {
+            ${meetingIri} ex:startDate ?sd .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:meetingTime ?mt .
+          };
+          DELETE WHERE {
+            ${meetingIri} schema:url ?u .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:minutesUrl ?mu .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:location ?loc .
+          };
+          DELETE WHERE {
+            ${meetingIri} rfu:hasParticipant ?p .
+          };
+        `;
+      }
 
-    if (formData.recurrenceType === 'periodica') {
       sparql += `
-        <${meetingUri}> rfu:frequency "${formData.frequency}" ;
-                        rfu:dayOfWeek "${formData.dayOfWeek}" .
+        INSERT DATA {
+          ${meetingIri} rdf:type vivo:Meeting ;
+                          rdfs:label ${lit(formData.label.trim())} ;
+                          rfu:createdBy <${userUri}> ;
+                          rfu:recurrenceType ${lit(formData.recurrenceType)} ;
+                          rfu:meetingTime ${lit(formData.time)} .
       `;
-    } else if (formData.date) {
-      sparql += `
-        <${meetingUri}> ex:startDate "${formData.date}" .
-      `;
-    }
 
-    if (formData.meetingUrl.trim()) {
-      sparql += `<${meetingUri}> schema:url <${formData.meetingUrl.trim()}> .\n`;
-    }
-    if (formData.minutesUrl.trim()) {
-      sparql += `<${meetingUri}> rfu:minutesUrl "${formData.minutesUrl.trim().replace(/"/g, '\\"')}" .\n`;
-    }
-    if (formData.location.trim()) {
-      sparql += `<${meetingUri}> rfu:location "${formData.location.trim().replace(/"/g, '\\"')}" .\n`;
-    }
+      if (formData.recurrenceType === 'periodica') {
+        sparql += `
+          ${meetingIri} rfu:frequency ${lit(formData.frequency)} ;
+                          rfu:dayOfWeek ${lit(formData.dayOfWeek)} .
+        `;
+      } else if (formData.date) {
+        sparql += `
+          ${meetingIri} ex:startDate ${lit(formData.date)} .
+        `;
+      }
 
-    if (formData.syncToCanvas) {
-      sparql += `
-        <${meetingUri}> ex:posX "${posX}" ;
-                        ex:posY "${posY}" .
-      `;
+      if (formData.meetingUrl.trim()) {
+        sparql += `${meetingIri} schema:url ${httpIri(formData.meetingUrl)} .\n`;
+      }
+      if (formData.minutesUrl.trim()) {
+        sparql += `${meetingIri} rfu:minutesUrl ${lit(formData.minutesUrl.trim())} .\n`;
+      }
+      if (formData.location.trim()) {
+        sparql += `${meetingIri} rfu:location ${lit(formData.location.trim())} .\n`;
+      }
+
+      if (formData.syncToCanvas) {
+        sparql += `
+          ${meetingIri} ex:posX ${lit(num(posX))} ;
+                          ex:posY ${lit(num(posY))} .
+        `;
+      }
+
+      formData.participants.forEach(pUri => {
+        sparql += `${meetingIri} rfu:hasParticipant <${pUri}> .\n`;
+      });
+
+      sparql += `}`;
+    } catch (err: any) {
+      alert(err?.message || 'Error en los datos de la reunión.');
+      return;
     }
-
-    formData.participants.forEach(pUri => {
-      sparql += `<${meetingUri}> rfu:hasParticipant <${pUri}> .\n`;
-    });
-
-    sparql += `}`;
 
     try {
       await fetchWithAuth('/api/sparql', {
@@ -440,7 +451,6 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
     }
 
     const sessionUri = `${activeHistoryMeeting.uri}_session_${Date.now()}`;
-    const escapedNotes = newSessionForm.notes.trim().replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
     let insertQuery = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -449,8 +459,8 @@ export const MeetingsPanel: React.FC<MeetingsPanelProps> = ({
       INSERT DATA {
         <${activeHistoryMeeting.uri}> rfu:hasSession <${sessionUri}> .
         <${sessionUri}> rdf:type rfu:MeetingSession ;
-                        rfu:sessionDate "${newSessionForm.date}" ;
-                        rfu:sessionNotes "${escapedNotes}" .
+                        rfu:sessionDate ${lit(newSessionForm.date)} ;
+                        rfu:sessionNotes ${lit(newSessionForm.notes.trim())} .
     `;
 
     newSessionForm.attendees.forEach(aUri => {

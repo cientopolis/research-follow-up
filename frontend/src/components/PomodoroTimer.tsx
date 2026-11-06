@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from '../firebase';
+import { lit } from '../utils/sparql';
 
 export interface PomodoroTimerNode {
   uri: string;
@@ -419,8 +420,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
       INSERT DATA {
         <${taskUri}> rdf:type tmo:Task ;
-          dcterms:title "${title.replace(/"/g, '\\"')}" ;
-          dcterms:description "${description.replace(/"/g, '\\"')}" ;
+          dcterms:title ${lit(title)} ;
+          dcterms:description ${lit(description)} ;
           rfu:taskStatus "pending" ;
           rfu:createdBy <${userUri}> ;
       ${nodesTriples}    rdf:type tmo:Task .
@@ -503,6 +504,9 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
     const pomodoroId = Date.now();
     const pomodoroUri = `http://cientopolis.org/rfu/pomodoro/${pomodoroId}`;
 
+    const startLiteral = lit(startIso, { datatype: 'http://www.w3.org/2001/XMLSchema#dateTime' });
+    const endLiteral = lit(endIso, { datatype: 'http://www.w3.org/2001/XMLSchema#dateTime' });
+
     const query = `
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
       PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
@@ -510,16 +514,16 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({
 
       INSERT {
         <${pomodoroUri}> rdf:type rfu:PomodoroSession ;
-          rfu:startTime "${startIso}"^^xsd:dateTime ;
-          rfu:endTime "${endIso}"^^xsd:dateTime .
+          rfu:startTime ${startLiteral} ;
+          rfu:endTime ${endLiteral} .
 
         <${taskUri}> rfu:hasPomodoro <${pomodoroUri}> .
       }
       WHERE {
         FILTER NOT EXISTS {
           <${taskUri}> rfu:hasPomodoro ?existingPomodoro .
-          ?existingPomodoro rfu:startTime "${startIso}"^^xsd:dateTime ;
-                            rfu:endTime "${endIso}"^^xsd:dateTime .
+          ?existingPomodoro rfu:startTime ${startLiteral} ;
+                            rfu:endTime ${endLiteral} .
         }
       }
     `;

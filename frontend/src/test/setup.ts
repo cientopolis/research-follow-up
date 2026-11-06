@@ -11,6 +11,7 @@ vi.mock('firebase/auth', () => {
     uid: 'test-user-uid',
     email: 'test@example.com',
     getIdToken: vi.fn().mockResolvedValue('test-token-jwt'),
+    getIdTokenResult: vi.fn().mockResolvedValue({ claims: {} }),
   };
   const mockAuth = {
     currentUser: mockUser,

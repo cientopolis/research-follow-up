@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { lit, iri, httpIri, isValidUriSuffix } from '../utils/sparql';
 
 interface CatalogItem {
   uri: string;
@@ -162,7 +163,6 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       chosen.forEach(m => {
         const targetUri = m.uri || `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${m.uriSuffix || m.slug}`;
         const targetType = typeOverrides[m.slug] || m.vivoType || 'http://vivoweb.org/ontology/core#FacultyMember';
-        const escName = (m.name || '').replace(/"/g, '\\"');
 
         deleteBlocks.push(`
           DELETE WHERE { <${targetUri}> rdf:type vivo:FacultyMember . };
@@ -177,22 +177,22 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         `);
 
         insertTriples.push(`<${targetUri}> rdf:type <${targetType}> .`);
-        insertTriples.push(`<${targetUri}> rdfs:label "${escName}" .`);
+        insertTriples.push(`<${targetUri}> rdfs:label ${lit(m.name || '')} .`);
         if (m.photoUrl) {
-          insertTriples.push(`<${targetUri}> schema:image "${m.photoUrl.replace(/"/g, '\\"')}" .`);
+          insertTriples.push(`<${targetUri}> schema:image ${lit(m.photoUrl)} .`);
         }
         if (m.profileUrl) {
-          insertTriples.push(`<${targetUri}> schema:url <${m.profileUrl}> .`);
+          insertTriples.push(`<${targetUri}> schema:url ${httpIri(m.profileUrl)} .`);
         }
         if (m.email) {
-          insertTriples.push(`<${targetUri}> vivo:email "${m.email.replace(/"/g, '\\"')}" .`);
+          insertTriples.push(`<${targetUri}> vivo:email ${lit(m.email)} .`);
         }
         if (m.position) {
-          insertTriples.push(`<${targetUri}> ex:status "${m.position.replace(/"/g, '\\"')}" .`);
+          insertTriples.push(`<${targetUri}> ex:status ${lit(m.position)} .`);
         }
         if (m.tags) {
           m.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(tag => {
-            insertTriples.push(`<${targetUri}> dcterms:subject "${tag.replace(/"/g, '\\"')}" .`);
+            insertTriples.push(`<${targetUri}> dcterms:subject ${lit(tag)} .`);
           });
         }
       });
@@ -346,34 +346,40 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
       DELETE WHERE { <${uri}> dcterms:subject ?s . }
     `;
 
-    let insertTriples = `
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX bibo: <http://purl.org/ontology/bibo/>
-      PREFIX dcterms: <http://purl.org/dc/terms/>
-      PREFIX schema: <http://schema.org/>
-      PREFIX vivo: <http://vivoweb.org/ontology/core#>
-      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
+    let insertTriples = '';
+    try {
+      insertTriples = `
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX bibo: <http://purl.org/ontology/bibo/>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX vivo: <http://vivoweb.org/ontology/core#>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
-      INSERT DATA {
-        <${uri}> rdfs:label "${label.replace(/"/g, '\\"')}" .
-    `;
+        INSERT DATA {
+          <${uri}> rdfs:label ${lit(label)} .
+      `;
 
-    const isVenueCategory = activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal';
+      const isVenueCategory = activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal';
 
-    if (isVenueCategory) {
-      if (rank) insertTriples += ` <${uri}> bibo:rank "${rank.replace(/"/g, '\\"')}" .`;
-      if (deadlineMonth) insertTriples += ` <${uri}> ex:submissionDeadlineMonth "${deadlineMonth.replace(/"/g, '\\"')}" .`;
+      if (isVenueCategory) {
+        if (rank) insertTriples += ` <${uri}> bibo:rank ${lit(rank)} .`;
+        if (deadlineMonth) insertTriples += ` <${uri}> ex:submissionDeadlineMonth ${lit(deadlineMonth)} .`;
+      }
+      if (externalUrl) insertTriples += ` <${uri}> schema:url ${httpIri(externalUrl)} .`;
+      if (photoUrl) insertTriples += ` <${uri}> schema:image ${lit(photoUrl)} .`;
+      if (email) insertTriples += ` <${uri}> vivo:email ${lit(email)} .`;
+      if (subject) {
+        const subjects = subject.split(',').map(s => s.trim()).filter(Boolean);
+        subjects.forEach(s => {
+          insertTriples += ` <${uri}> dcterms:subject ${lit(s)} .`;
+        });
+      }
+      insertTriples += ` }`;
+    } catch (err: any) {
+      alert(err?.message || 'Error en los datos ingresados.');
+      return;
     }
-    if (externalUrl) insertTriples += ` <${uri}> schema:url <${externalUrl}> .`;
-    if (photoUrl) insertTriples += ` <${uri}> schema:image "${photoUrl.replace(/"/g, '\\"')}" .`;
-    if (email) insertTriples += ` <${uri}> vivo:email "${email.replace(/"/g, '\\"')}" .`;
-    if (subject) {
-      const subjects = subject.split(',').map(s => s.trim()).filter(Boolean);
-      subjects.forEach(s => {
-        insertTriples += ` <${uri}> dcterms:subject "${s.replace(/"/g, '\\"')}" .`;
-      });
-    }
-    insertTriples += ` }`;
 
     try {
       await fetchWithAuth('/api/sparql', {
@@ -427,36 +433,47 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
     }
 
     const cleanSuffix = createForm.uriSuffix.trim().replace(/\s+/g, '');
+    if (!isValidUriSuffix(cleanSuffix)) {
+      alert('El sufijo de URI contiene caracteres no válidos. Usa solo letras, números, guiones o puntos.');
+      return;
+    }
     const nodeUri = `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/${cleanSuffix}`;
 
-    let insertQuery = `
-      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      PREFIX bibo: <http://purl.org/ontology/bibo/>
-      PREFIX dcterms: <http://purl.org/dc/terms/>
-      PREFIX schema: <http://schema.org/>
-      PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
+    let insertQuery = '';
+    try {
+      const nodeIri = iri(nodeUri);
+      insertQuery = `
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX bibo: <http://purl.org/ontology/bibo/>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
 
-      INSERT DATA {
-        <${nodeUri}> rdf:type <${activeCategory}> .
-        <${nodeUri}> rdfs:label "${createForm.label.replace(/"/g, '\\"')}" .
-    `;
+        INSERT DATA {
+          ${nodeIri} rdf:type ${iri(activeCategory)} .
+          ${nodeIri} rdfs:label ${lit(createForm.label)} .
+      `;
 
-    if (activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') {
-      if (createForm.rank) insertQuery += ` <${nodeUri}> bibo:rank "${createForm.rank}" .`;
-      if (createForm.deadlineMonth) insertQuery += ` <${nodeUri}> ex:submissionDeadlineMonth "${createForm.deadlineMonth}" .`;
+      if (activeCategory === 'http://purl.org/ontology/bibo/Conference' || activeCategory === 'http://purl.org/ontology/bibo/Journal') {
+        if (createForm.rank) insertQuery += ` ${nodeIri} bibo:rank ${lit(createForm.rank)} .`;
+        if (createForm.deadlineMonth) insertQuery += ` ${nodeIri} ex:submissionDeadlineMonth ${lit(createForm.deadlineMonth)} .`;
+      }
+      if (createForm.externalUrl) insertQuery += ` ${nodeIri} schema:url ${httpIri(createForm.externalUrl)} .`;
+      if (createForm.photoUrl) insertQuery += ` ${nodeIri} schema:image ${lit(createForm.photoUrl)} .`;
+      if (createForm.email) insertQuery += ` ${nodeIri} <http://vivoweb.org/ontology/core#email> ${lit(createForm.email)} .`;
+      if (createForm.subject) {
+        const subjects = createForm.subject.split(',').map(s => s.trim()).filter(Boolean);
+        subjects.forEach(s => {
+          insertQuery += ` ${nodeIri} dcterms:subject ${lit(s)} .`;
+        });
+      }
+
+      insertQuery += ` }`;
+    } catch (err: any) {
+      alert(err?.message || 'Error en los datos de la nueva entidad.');
+      return;
     }
-    if (createForm.externalUrl) insertQuery += ` <${nodeUri}> schema:url <${createForm.externalUrl}> .`;
-    if (createForm.photoUrl) insertQuery += ` <${nodeUri}> schema:image "${createForm.photoUrl.replace(/"/g, '\\"')}" .`;
-    if (createForm.email) insertQuery += ` <${nodeUri}> <http://vivoweb.org/ontology/core#email> "${createForm.email.replace(/"/g, '\\"')}" .`;
-    if (createForm.subject) {
-      const subjects = createForm.subject.split(',').map(s => s.trim()).filter(Boolean);
-      subjects.forEach(s => {
-        insertQuery += ` <${nodeUri}> dcterms:subject "${s.replace(/"/g, '\\"')}" .`;
-      });
-    }
-
-    insertQuery += ` }`;
 
     try {
       await fetchWithAuth('/api/sparql', {

@@ -195,7 +195,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               </thead>
               <tbody>
                 {users.map((u) => {
-                  const isAdmin = !!(u.customClaims?.admin || u.customClaims?.superadmin || u.email?.startsWith('admin@') || u.email?.startsWith('superadmin@'));
+                  const isAdmin = !!(u.customClaims?.admin || u.customClaims?.superadmin);
                   const isCurrent = u.uid === currentUid;
 
                   return (

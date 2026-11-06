@@ -243,5 +243,15 @@ Toda la configuración para contenedorizar la aplicación se encuentra aislada e
 
 ---
 
+## 🔒 Seguridad y Buenas Prácticas
+
+*   **Control de Acceso Basado en Claims (`checkSuperAdmin`)**: El rol de SuperAdmin se verifica exclusivamente mediante *custom claims* firmados en el token de Firebase (`admin: true` o `superadmin: true`), evitando escaladas de privilegio por coincidencia de correo electrónico. Operaciones sensibles como la administración de usuarios, el blanqueo de base de datos y el cambio del motor de inferencia (`POST /api/graphdb/ruleset`) exigen este rol.
+*   **Provisión Segura en Producción**: Si `NODE_ENV=production` y `SUPERADMIN_PASSWORD` está ausente, tiene menos de 12 caracteres o conserva el valor por defecto, el servidor omite la creación automática del usuario SuperAdmin.
+*   **CORS Restringido**: Por defecto no se habilitan orígenes cruzados abiertos; si se requiere acceso desde dominios externos, se configuran explícitamente en la variable de entorno `CORS_ORIGINS` (lista separada por comas).
+*   **Escapado y Validación SPARQL (`frontend/src/utils/sparql.ts`)**: Toda entrada de usuario que se incorpora en consultas SPARQL utiliza los constructores tipados `lit()`, `iri()`, `httpIri()`, `num()` e `isValidUriSuffix()` conforme a la gramática SPARQL 1.1 (`ECHAR` e `IRIREF`), previniendo inyecciones por comillas, barras invertidas o cierre prematuro de IRIs.
+*   **Clasificación Precisa de Consultas (`server/security.js`)**: El proxy `/api/sparql` distingue consultas de lectura (`SELECT`, `ASK`, `CONSTRUCT`, `DESCRIBE`) de operaciones de actualización (`UPDATE`) ignorando comentarios, literales entre comillas e IRIs.
+
+---
+
 ## 🔍 Consultas SPARQL
 Para conocer en detalle todas las consultas y mutaciones SPARQL que el sistema utiliza para interactuar con GraphDB (nodos, aristas, inspector semántico y tareas del Pomodoro), consulta la [**Documentación de Consultas SPARQL**](SPARQL_QUERIES.md).

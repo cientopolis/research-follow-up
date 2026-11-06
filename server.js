@@ -5,6 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
+import {
+  isSuperAdminToken,
+  isSparqlUpdate,
+  parseCorsOrigins,
+  isWeakSuperAdminPassword,
+} from './server/security.js';
 
 // Cargar variables de entorno locales (.env.local tiene prioridad)
 dotenv.config({ path: '.env.local' });
@@ -21,8 +27,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+if (corsOrigins.length > 0) {
+  app.use(cors({ origin: corsOrigins }));
+}
+app.use(express.json({ limit: '2mb' }));
 
 const PORT = process.env.PORT || 3000;
 const GRAPHDB_URL = process.env.GRAPHDB_URL || 'http://localhost:7200';
@@ -43,6 +52,10 @@ const ensureSuperAdminUser = async () => {
       superAdminUser = await authService.getUserByEmail(SUPERADMIN_EMAIL);
     } catch (err) {
       if (err.code === 'auth/user-not-found') {
+        if (process.env.NODE_ENV === 'production' && isWeakSuperAdminPassword(SUPERADMIN_PASSWORD)) {
+          console.warn('[SuperAdmin Init] SUPERADMIN_PASSWORD ausente o débil (< 12 caracteres o valor por defecto): no se crea el usuario automáticamente en producción.');
+          return;
+        }
         superAdminUser = await authService.createUser({
           email: SUPERADMIN_EMAIL,
           password: SUPERADMIN_PASSWORD,
@@ -80,20 +93,12 @@ const checkAuth = async (req, res, next) => {
   }
 };
 
-// SuperAdmin Middleware (Checks custom claim `admin: true` OR `superadmin: true` OR email fallback)
+// SuperAdmin Middleware (Checks verified custom claims `admin: true` OR `superadmin: true`)
 const checkSuperAdmin = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Acceso no autorizado.' });
   }
-  const isSuperAdminClaim = req.user.admin === true || req.user.superadmin === true;
-  const isSuperAdminEmail = req.user.email && (
-    req.user.email === SUPERADMIN_EMAIL ||
-    req.user.email === 'admin@cientopolis.org' ||
-    req.user.email.startsWith('superadmin@') ||
-    req.user.email.startsWith('admin@')
-  );
-
-  if (isSuperAdminClaim || isSuperAdminEmail) {
+  if (isSuperAdminToken(req.user)) {
     return next();
   }
   return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de Super Usuario.' });
@@ -253,11 +258,11 @@ app.get('/api/lifia-members', checkAuth, async (req, res) => {
 // Endpoint unificado Proxy SPARQL (Protegido por checkAuth)
 app.post('/api/sparql', checkAuth, async (req, res) => {
   const { query, infer } = req.body;
-  if (!query) {
-    return res.status(400).json({ error: 'Falta el parámetro "query" en el cuerpo de la solicitud.' });
+  if (!query || typeof query !== 'string') {
+    return res.status(400).json({ error: 'Falta el parámetro "query" válido en el cuerpo de la solicitud.' });
   }
 
-  const isUpdate = /\b(insert|delete|clear|load|drop|create|with)\b/i.test(query);
+  const isUpdate = isSparqlUpdate(query);
   let endpoint = '';
   let body = '';
   let headers = {};
@@ -483,7 +488,7 @@ app.get('/api/graphdb/ruleset', checkAuth, async (req, res) => {
 });
 
 // 7. Cambiar el motor de inferencia (ruleset) en GraphDB entre el actual (rdfsplus-optimized) y OWL-DL (owl-max-optimized)
-app.post('/api/graphdb/ruleset', checkAuth, async (req, res) => {
+app.post('/api/graphdb/ruleset', checkAuth, checkSuperAdmin, async (req, res) => {
   const { ruleset } = req.body;
   const ALLOWED_RULESETS = {
     'rdfsplus-optimized': 'RDFS-Plus (Optimized)',
