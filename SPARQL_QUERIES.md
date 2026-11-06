@@ -15,6 +15,9 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
   - [2.3 Actualizar detalles de un nodo](#23-actualizar-detalles-de-un-nodo)
   - [2.4 Crear una conexión entre nodos](#24-crear-una-conexión-entre-nodos)
   - [2.5 Eliminar una conexión (relación) entre nodos](#25-eliminar-una-conexión-relación-entre-nodos)
+  - [2.6 Invertir dirección de una relación](#26-invertir-dirección-de-una-relación)
+  - [2.7 Eliminar relación bidireccional en ambos sentidos](#27-eliminar-relación-bidireccional-en-ambos-sentidos)
+  - [2.8 Vinculación semántica Persona y Proyecto mediante Rol VIVO](#28-vinculación-semántica-persona-y-proyecto-mediante-rol-vivo)
 - [3. Consultas de la Funcionalidad Pomodoro](#3-consultas-de-la-funcionalidad-pomodoro)
   - [3.1 Obtener tareas del Pomodoro](#31-obtener-tareas-del-pomodoro)
   - [3.2 Crear una tarea en GraphDB](#32-crear-una-tarea-en-graphdb)
@@ -25,6 +28,8 @@ Este documento contiene y describe todas las consultas y mutaciones SPARQL utili
   - [4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA](#42-importación--sincronización-masiva-de-personas-desde-memoriaslifia)
   - [4.3 Blanqueo / Reset de la Base de Datos (conservando ontologías)](#43-blanqueo--reset-de-la-base-de-datos-conservando-ontologías)
 - [5. Agenda de Reuniones y Bitácora de Encuentros (`MeetingsPanel.tsx`)](#5-agenda-de-reuniones-y-bitácora-de-encuentros-meetingspaneltsx)
+- [6. Gestión del Motor de Inferencia en GraphDB (`server.js` / `App.tsx`)](#6-gestión-del-motor-de-inferencia-en-graphdb-serverjs--apptsx)
+- [7. Consola SPARQL Libre y Formatos de Salida](#7-consola-sparql-libre-y-formatos-de-salida)
 
 ---
 
@@ -192,6 +197,58 @@ Elimina del Triplestore la tripleta exacta que vincula el nodo origen (`?from`) 
     ```sparql
     DELETE DATA {
       <${selectedConnection.from}> <${selectedConnection.predicate}> <${selectedConnection.to}> .
+    }
+    ```
+
+### 2.6 Invertir dirección de una relación
+Invierte atómicamente el sentido de una relación semántica dirigida entre dos nodos ($A \rightarrow B$ a $B \rightarrow A$).
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx)
+*   **Query**:
+    ```sparql
+    DELETE DATA {
+      <${fromUri}> <${predicate}> <${toUri}> .
+    } ;
+    INSERT DATA {
+      <${toUri}> <${predicate}> <${fromUri}> .
+    }
+    ```
+
+### 2.7 Eliminar relación bidireccional en ambos sentidos
+Cuando se detecta que dos nodos están vinculados simétrica o mutuamente por el mismo predicado en ambos sentidos, elimina ambas tripletas en una única transacción.
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx)
+*   **Query**:
+    ```sparql
+    DELETE DATA {
+      <${fromUri}> <${predicate}> <${toUri}> .
+      <${toUri}> <${predicate}> <${fromUri}> .
+    }
+    ```
+
+### 2.8 Vinculación semántica Persona y Proyecto mediante Rol VIVO (Role Pattern)
+Al conectar una persona (`vivo:FacultyMember`, `vivo:GraduateStudent`, etc.) con un proyecto (`vivo:Project`), se genera un nodo intermedio de rol reificado (`vivo:PrincipalInvestigatorRole` o `vivo:MemberRole`) posicionado espacialmente entre ambos, siguiendo el estándar ontológico de VIVO y OBO:
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx)
+*   **Query**:
+    ```sparql
+    PREFIX vivo: <http://vivoweb.org/ontology/core#>
+    PREFIX obo: <http://purl.obolibrary.org/obo/>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
+    PREFIX rfu: <http://cientopolis.org/rfu/>
+
+    INSERT DATA {
+      <${roleUri}> a ${roleClass} ;
+                   rdfs:label "${roleLabel}" ;
+                   ex:posX "${midX}" ;
+                   ex:posY "${midY}" ;
+                   obo:RO_0000052 <${personUri}> ;
+                   obo:BFO_0000054 <${projectUri}> ;
+                   rfu:createdBy <${userUri}> .
+
+      <${projectUri}> vivo:relates <${personUri}> ;
+                      vivo:relates <${roleUri}> .
+
+      <${roleUri}> obo:RO_0000052 <${personUri}> .
+      <${roleUri}> obo:BFO_0000054 <${projectUri}> .
     }
     ```
 
@@ -471,6 +528,31 @@ Registra el ruleset en caso de no estar cargado, cambia el `sys:defaultRuleset` 
     PREFIX sys: <http://www.ontotext.com/owlim/system#>
     INSERT DATA { _:b sys:reinfer [] }
     ```
+
+---
+
+## 7. Consola SPARQL Libre y Formatos de Salida (`#sidebarSemantic`)
+
+La barra lateral derecha incluye un entorno de ejecución libre SPARQL accesible desde el botón **Consola SPARQL** (`#btnConsolaSparql`), permitiendo a investigadores y desarrolladores ejecutar consultas directas sobre GraphDB con soporte multiformato:
+
+### 7.1 Consulta por Defecto
+```sparql
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX vivo: <http://vivoweb.org/ontology/core#>
+PREFIX dblp: <https://dblp.org/rdf/schema#>
+
+SELECT ?s ?p ?o WHERE {
+  ?s ?p ?o .
+} LIMIT 10
+```
+
+### 7.2 Formatos de Respuesta Soportados
+*   **📊 Tabla Interactiva (`table`)**: Renderizado dinámico de encabezados y celdas HTML con truncado inteligente y tipografía de alto contraste (negro sobre fondos claros).
+*   **📜 JSON Formateado (`json`)**: Respuesta estándar `application/sparql-results+json` indentada con resaltado.
+*   **📄 CSV (`csv`)**: Valores separados por comas con opción rápida de copiado para análisis de datos tabulares.
+*   **📑 TSV (`tsv`)**: Valores separados por tabulaciones ideal para pegar directamente en Google Sheets o Excel.
+
 
 
 

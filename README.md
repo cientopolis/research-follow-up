@@ -169,6 +169,27 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
     *   Permite activar/desactivar la inferencia en las consultas del lienzo (`infer=true` / `infer=false`) y **cambiar en caliente el motor de razonamiento (ruleset)** activo del repositorio `researcherDB` en Ontotext GraphDB (`GET/POST /api/graphdb/ruleset`) entre:
         1. **`rdfsplus-optimized` (RDFS-Plus — Motor por defecto)**: Razonador ligero con soporte para jerarquías RDFS, propiedades inversas (`owl:inverseOf`), simétricas y transitivas.
         2. **`owl-max-optimized` (OWL-DL / OWL-Max)**: Razonador expresivo OWL-DL con soporte para equivalencia de clases, restricciones de propiedades y axiomas OWL completos, ejecutando automáticamente `sys:reinfer` al cambiar de motor.
+*   **Modo Foco y Contracción Visual de Flechas (`#btnModoFoco`, `#btnToggleModoFoco`)**:
+    *   **Limpieza Visual Inteligente**: En grafos con alta densidad de conexiones, el Modo Foco contrae las flechas que no estén en interacción activa hacia el interior de su nodo de origen, evitando la proliferación excesiva de líneas en el lienzo.
+    *   **Insignia de Origen (Hub Badge)**: Cada nodo con relaciones salientes muestra una cápsula compacta en su base (ej. `↗ 3 relaciones` / `↗ 1 relación`).
+    *   **Despliegue Bajo Demanda (Hover y Selección)**: Al posar el puntero del mouse sobre un nodo (`hover`) o seleccionarlo con un clic, sus relaciones se despliegan suavemente conectando con sus nodos destino.
+    *   **Fijación Permanente con Pin (`📌`)**: Al hacer clic en la insignia del nodo, este queda anclado en estado expandido sin importar qué otra parte del grafo se consulte.
+    *   **Persistencia de Estado**: La preferencia (`🎯 Modo Foco: Activo` o `🌐 Flechas: Todas`) se guarda en `localStorage` (`canvas_focus_mode`).
+*   **Búsqueda y Filtrado en la ventana "Elegir Relación" (`#modalElegirRelacion`)**:
+    *   **Buscador de Nodos Destino**: Menú desplegable interactivo con filtro en tiempo real para encontrar el nodo con el que se desea conectar por nombre, tipo ontológico (Investigador, Tesista, Paper, Conferencia, Proyecto) o URI.
+    *   **Buscador de Relaciones Semánticas**: Filtro dedicado para hallar rápidamente predicados por nombre, descripción o categoría (*Publicaciones y Venues*, *VIVO*, *DBLP*, *RFU*).
+    *   **Accesibilidad y Fluidez**: Cierre con tecla `Escape`, clic exterior y sincronización nativa de formularios.
+*   **Gestión Avanzada de Conectores y Relaciones Bidireccionales**:
+    *   **Detección de Bidireccionalidad**: El inspector semántico detecta automáticamente si una relación entre dos nodos está presente en ambos sentidos (ej. `vivo:advisor` cruzado).
+    *   **Inversión de Dirección (`🔄 Invertir Dirección`)**: Permite cambiar el sentido de una relación (de $A \rightarrow B$ a $B \rightarrow A$) en una única operación atómica `DELETE/INSERT` en GraphDB sin necesidad de recrear la arista manualmente.
+    *   **Eliminación en Ambos Sentidos (`🗑️ Eliminar en ambos sentidos`)**: Depura ambas direcciones de la relación con un solo clic.
+*   **Consola SPARQL Redimensionable y Multiformato (`#sidebarSemantic`, `#btnConsolaSparql`)**:
+    *   **Panel Lateral Ajustable**: Permite redimensionar el ancho del editor arrastrando el borde izquierdo con el mouse (`resize handle`) para trabajar cómodamente en consultas complejas.
+    *   **Tipografía de Alto Contraste**: Texto en color negro definido tanto para el editor SPARQL como para los visores de resultados.
+    *   **Formatos de Salida Flexibles**: Selector de visualización entre **Tabla interactiva** (columnas dinámicas), **JSON**, **CSV** y **TSV** para exportar datos hacia hojas de cálculo o scripts.
+*   **Pomodoro con Sonidos Mecánicos y Frecuencia Calibrada**:
+    *   Nuevos sonidos mecánicos analógicos que emulan fielmente el tic-tac de un reloj de cocina / temporizador mecánico.
+    *   Soporte para audio continuo en bucle (`loop`) durante todo el ciclo de concentración con volumen calibrado para asegurar audibilidad óptima sin distorsión.
 
 ---
 
