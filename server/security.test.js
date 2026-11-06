@@ -17,9 +17,17 @@ describe('server/security', () => {
       assert.equal(isSuperAdminToken({ email: 'admin@cientopolis.org', admin: false }), false);
     });
 
-    it('acepta tokens con custom claims admin: true o superadmin: true', () => {
+    it('acepta tokens con custom claims admin: true, superadmin: true o email exacto de SUPERADMIN_EMAIL', () => {
       assert.equal(isSuperAdminToken({ uid: '123', admin: true }), true);
       assert.equal(isSuperAdminToken({ uid: '123', superadmin: true }), true);
+      assert.equal(
+        isSuperAdminToken({ uid: '123', email: 'Director@lifia.info.unlp.edu.ar' }, 'director@lifia.info.unlp.edu.ar'),
+        true
+      );
+      assert.equal(
+        isSuperAdminToken({ uid: '123', email: 'admin@gmail.com' }, 'director@lifia.info.unlp.edu.ar'),
+        false
+      );
     });
   });
 

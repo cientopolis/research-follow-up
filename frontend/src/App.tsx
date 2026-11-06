@@ -372,7 +372,7 @@ export default function App() {
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // Monitor auth state changes & fetch custom claims
+  // Monitor auth state changes & fetch custom claims / server-configured SuperAdmin status
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -380,7 +380,20 @@ export default function App() {
         try {
           const tokenResult = await currentUser.getIdTokenResult(true);
           const isAdminClaim = Boolean(tokenResult?.claims?.admin || tokenResult?.claims?.superadmin);
-          setIsSuperAdmin(isAdminClaim);
+          if (isAdminClaim) {
+            setIsSuperAdmin(true);
+          } else {
+            const token = await currentUser.getIdToken();
+            const res = await fetch('/api/auth/me', {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setIsSuperAdmin(Boolean(data?.isSuperAdmin));
+            } else {
+              setIsSuperAdmin(false);
+            }
+          }
         } catch (e) {
           setIsSuperAdmin(false);
         }

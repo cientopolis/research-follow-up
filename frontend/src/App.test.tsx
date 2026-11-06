@@ -19,8 +19,8 @@ describe('App Canvas Component Tests', () => {
     let callCount = 0;
     const fetchMock = vi.fn().mockImplementation((url, options) => {
       // Mock different responses depending on the SPARQL query
-      const body = JSON.parse(options.body);
-      const query = body.query;
+      const body = options?.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
 
       if (query.includes('SELECT DISTINCT ?node')) {
         callCount++;
@@ -113,8 +113,9 @@ describe('App Canvas Component Tests', () => {
 
     // Verify the SPARQL INSERT DATA query was indeed called
     const insertCalls = fetchMock.mock.calls.filter(call => {
+      if (!call[1]?.body) return false;
       const body = JSON.parse(call[1].body);
-      return body.query.includes('INSERT DATA');
+      return (body.query || '').includes('INSERT DATA');
     });
     expect(insertCalls.length).toBe(1);
   });
@@ -227,8 +228,8 @@ describe('App Canvas Component Tests', () => {
 
   it('debe permitir buscar y autocompletar tópicos CSO desplegando sugerencias', async () => {
     const fetchMock = vi.fn().mockImplementation((url, options) => {
-      const body = JSON.parse(options.body);
-      const query = body.query;
+      const body = options?.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
 
       if (query.includes('rdfs:label') && query.includes('CONTAINS')) {
         return Promise.resolve({
@@ -290,8 +291,8 @@ describe('App Canvas Component Tests', () => {
   it('debe quitar un nodo de conferencia del lienzo sin borrarlo del repositorio si el usuario no es SuperAdmin', async () => {
     let deleteExecuted = false;
     const fetchMock = vi.fn().mockImplementation((url, options) => {
-      const body = JSON.parse(options.body);
-      const query = body.query;
+      const body = options?.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
 
       if (query.includes('SELECT DISTINCT ?node')) {
         return Promise.resolve({

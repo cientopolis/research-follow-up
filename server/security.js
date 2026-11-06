@@ -1,6 +1,14 @@
-// Rol SuperAdmin: únicamente por custom claims verificados en el ID token
-export const isSuperAdminToken = (decoded) =>
-  !!decoded && (decoded.admin === true || decoded.superadmin === true);
+// Rol SuperAdmin: por custom claims verificados en el ID token o coincidencia exacta con SUPERADMIN_EMAIL del servidor
+export const isSuperAdminToken = (decoded, superAdminEmail = '') => {
+  if (!decoded) return false;
+  if (decoded.admin === true || decoded.superadmin === true) return true;
+  const configured = (superAdminEmail || '').trim().toLowerCase();
+  const tokenEmail = (decoded.email || '').trim().toLowerCase();
+  if (configured && tokenEmail && tokenEmail === configured) {
+    return true;
+  }
+  return false;
+};
 
 // Detecta si un texto SPARQL es un UPDATE ignorando comentarios, literales e IRIs
 export const isSparqlUpdate = (query) => {

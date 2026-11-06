@@ -93,16 +93,25 @@ const checkAuth = async (req, res, next) => {
   }
 };
 
-// SuperAdmin Middleware (Checks verified custom claims `admin: true` OR `superadmin: true`)
+// SuperAdmin Middleware (Checks verified custom claims or exact SUPERADMIN_EMAIL configured on server)
 const checkSuperAdmin = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Acceso no autorizado.' });
   }
-  if (isSuperAdminToken(req.user)) {
+  if (isSuperAdminToken(req.user, SUPERADMIN_EMAIL)) {
     return next();
   }
   return res.status(403).json({ error: 'Acceso denegado: Se requiere rol de Super Usuario.' });
 };
+
+// Endpoint para consultar perfil y rol del usuario autenticado (permite validar SUPERADMIN_EMAIL desde el servidor)
+app.get('/api/auth/me', checkAuth, (req, res) => {
+  return res.json({
+    uid: req.user.uid,
+    email: req.user.email || '',
+    isSuperAdmin: isSuperAdminToken(req.user, SUPERADMIN_EMAIL),
+  });
+});
 
 // Configurar cabeceras de autenticación para GraphDB
 const getGraphDBHeaders = (contentType = 'application/json') => {
