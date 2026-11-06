@@ -114,6 +114,59 @@ const DEFAULT_PROPERTIES_BY_TYPE: { [type: string]: { uri: string; label: string
   ]
 };
 
+const RELATION_CATEGORIES = [
+  {
+    category: "Publicaciones y Venues (Conferencias / Revistas)",
+    options: [
+      { value: "http://vivoweb.org/ontology/core#hasPublicationVenue", label: "vivo:hasPublicationVenue", desc: "Venue / Lugar oficial en la ontología VIVO" },
+      { value: "http://vivoweb.org/ontology/core#publicationVenue", label: "vivo:publicationVenue", desc: "Venue / Lugar de publicación planificado u oficial" },
+      { value: "http://purl.org/ontology/bibo/presentedAt", label: "bibo:presentedAt", desc: "Presentado o a presentar en conferencia" },
+      { value: "https://dblp.org/rdf/schema#publishedIn", label: "dblp:publishedIn", desc: "Publicado o a enviar en revista/conferencia" },
+      { value: "http://cientopolis.org/rfu/targetVenue", label: "rfu:targetVenue", desc: "Venue objetivo de envío (Planificación)" }
+    ]
+  },
+  {
+    category: "VIVO (académico)",
+    options: [
+      { value: "http://vivoweb.org/ontology/core#advisor", label: "vivo:advisor", desc: "Director de tesis" },
+      { value: "http://vivoweb.org/ontology/core#hasMember", label: "vivo:hasMember", desc: "Miembro de proyecto" },
+      { value: "http://vivoweb.org/ontology/core#relatedBy", label: "vivo:relatedBy", desc: "Relación genérica" },
+      { value: "http://vivoweb.org/ontology/core#supportedInformationResource", label: "vivo:supportedInformationResource", desc: "Produce paper" },
+      { value: "http://vivoweb.org/ontology/core#hasCollaborator", label: "vivo:hasCollaborator", desc: "Colabora con" }
+    ]
+  },
+  {
+    category: "DBLP / Bibliográfico",
+    options: [
+      { value: "https://dblp.org/rdf/schema#authoredBy", label: "dblp:authoredBy", desc: "Autoría de paper" }
+    ]
+  },
+  {
+    category: "RFU (proyecto)",
+    options: [
+      { value: "http://cientopolis.org/rfu/hasMindmap", label: "rfu:hasMindmap", desc: "Mapa mental de" },
+      { value: "http://cientopolis.org/rfu/collaboratesWith", label: "rfu:collaboratesWith", desc: "Colabora con" },
+      { value: "http://cientopolis.org/rfu/supervises", label: "rfu:supervises", desc: "Supervisa" },
+      { value: "http://cientopolis.org/rfu/partOf", label: "rfu:partOf", desc: "Parte de" },
+      { value: "http://cientopolis.org/rfu/researchedIn", label: "rfu:researchedIn", desc: "Investigado en" }
+    ]
+  }
+];
+
+const getNodeTypeIcon = (type: string = '') => {
+  if (type.includes('FacultyMember')) return '👨‍🏫';
+  if (type.includes('GraduateStudent') || type.includes('UndergraduateStudent')) return '🎓';
+  if (type.includes('Project')) return '🚀';
+  if (type.includes('Article') || type.includes('Publication') || type.includes('DocumentDraft')) return '📄';
+  if (type.includes('Conference')) return '🏛️';
+  if (type.includes('Journal')) return '📚';
+  if (type.includes('Meeting')) return '📅';
+  if (type.includes('Mindmap')) return '🧠';
+  if (type.includes('Folder')) return '📁';
+  if (type.includes('Topic')) return '🏷️';
+  return '📍';
+};
+
 export default function App() {
   const isDev = import.meta.env.DEV;
   const [user, setUser] = useState<User | null>(null);
@@ -281,6 +334,58 @@ export default function App() {
   const [pendingConnectionTarget, setPendingConnectionTarget] = useState<string | null>(null);
   const [showRelationModal, setShowRelationModal] = useState(false);
   const [selectedRelationPredicate, setSelectedRelationPredicate] = useState('http://vivoweb.org/ontology/core#relatedBy');
+
+  // Search and dropdown state for "Elegir Relación" modal
+  const [relationTargetSearch, setRelationTargetSearch] = useState('');
+  const [isRelationTargetOpen, setIsRelationTargetOpen] = useState(false);
+  const [relationPredicateSearch, setRelationPredicateSearch] = useState('');
+  const [isRelationPredicateOpen, setIsRelationPredicateOpen] = useState(false);
+
+  const openRelationModal = (sourceUri: string, targetUri: string, predicate: string = 'http://vivoweb.org/ontology/core#relatedBy') => {
+    setQuickConnectSourceUri(sourceUri);
+    setPendingConnectionTarget(targetUri);
+    setSelectedRelationPredicate(predicate);
+    setRelationTargetSearch('');
+    setIsRelationTargetOpen(false);
+    setRelationPredicateSearch('');
+    setIsRelationPredicateOpen(false);
+    setShowRelationModal(true);
+  };
+
+  const closeRelationModal = () => {
+    setShowRelationModal(false);
+    setQuickConnectSourceUri(null);
+    setPendingConnectionTarget(null);
+    setRelationTargetSearch('');
+    setIsRelationTargetOpen(false);
+    setRelationPredicateSearch('');
+    setIsRelationPredicateOpen(false);
+  };
+
+  const getPredicateDetails = (predicateUri: string) => {
+    for (const cat of RELATION_CATEGORIES) {
+      const found = cat.options.find(opt => opt.value === predicateUri);
+      if (found) return found;
+    }
+    return { value: predicateUri, label: getCleanLabel(predicateUri), desc: predicateUri };
+  };
+
+  // Close searchable dropdowns in "Elegir Relación" modal on outside click
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.searchable-target-node-container')) {
+        setIsRelationTargetOpen(false);
+      }
+      if (!target.closest('.searchable-relation-predicate-container')) {
+        setIsRelationPredicateOpen(false);
+      }
+    };
+    if (isRelationTargetOpen || isRelationPredicateOpen) {
+      document.addEventListener('mousedown', handleGlobalClick);
+      return () => document.removeEventListener('mousedown', handleGlobalClick);
+    }
+  }, [isRelationTargetOpen, isRelationPredicateOpen]);
 
   // Connection predicate editing & deletion
   const [editingPredicate, setEditingPredicate] = useState<string>('');
@@ -1643,9 +1748,7 @@ SELECT ?s ?p ?o WHERE {
         setShowNewNodeModal(false);
         await fetchGraphData();
         if (quickConnectSourceUri) {
-          setPendingConnectionTarget(nodeUri);
-          setSelectedRelationPredicate('http://vivoweb.org/ontology/core#publicationVenue');
-          setShowRelationModal(true);
+          openRelationModal(quickConnectSourceUri, nodeUri, 'http://vivoweb.org/ontology/core#publicationVenue');
         }
       }
     } catch (e) {
@@ -1785,12 +1888,10 @@ SELECT ?s ?p ?o WHERE {
         await fetchGraphData();
         // If this was a quick-connect action, open relation picker
         if (quickConnectSourceUri) {
-          setPendingConnectionTarget(uri);
           const defaultPred = finalType === 'http://cientopolis.org/rfu/Mindmap'
             ? 'http://cientopolis.org/rfu/hasMindmap'
             : 'http://vivoweb.org/ontology/core#relatedBy';
-          setSelectedRelationPredicate(defaultPred);
-          setShowRelationModal(true);
+          openRelationModal(quickConnectSourceUri, uri, defaultPred);
         }
       }
     } catch (e) {
@@ -1883,9 +1984,7 @@ SELECT ?s ?p ?o WHERE {
       });
       const data = await res.json();
       if (data.success) {
-        setShowRelationModal(false);
-        setQuickConnectSourceUri(null);
-        setPendingConnectionTarget(null);
+        closeRelationModal();
         fetchGraphData();
       }
     } catch (e) {
@@ -2841,10 +2940,7 @@ SELECT ?s ?p ?o WHERE {
                       alert('No hay otros nodos en el lienzo para conectar.');
                       return;
                     }
-                    setQuickConnectSourceUri(node.uri);
-                    setPendingConnectionTarget(otherNodes[0].uri);
-                    setSelectedRelationPredicate('http://vivoweb.org/ontology/core#relatedBy');
-                    setShowRelationModal(true);
+                    openRelationModal(node.uri, otherNodes[0].uri, 'http://vivoweb.org/ontology/core#relatedBy');
                   }}
                   style={{
                     position: 'absolute',
@@ -4285,99 +4381,574 @@ SELECT ?s ?p ?o WHERE {
         </div>
       )}
 
-      {/* Modal: Selector de relación (quick-connect) */}
-      {showRelationModal && quickConnectSourceUri && pendingConnectionTarget && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', justifyContent: 'center',
-          alignItems: 'center', zIndex: 600, backdropFilter: 'blur(4px)'
-        }}>
-          <div style={{
-            background: 'var(--bg-mantle)', padding: '28px', borderRadius: '18px',
-            width: '400px', display: 'flex', flexDirection: 'column', gap: '20px',
-            border: '1px solid var(--border-color)',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.25)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>🔗 Elegir Relación</h2>
-              <button className="btn" onClick={() => {
-                setShowRelationModal(false);
-                setQuickConnectSourceUri(null);
-                setPendingConnectionTarget(null);
-              }}>✕</button>
-            </div>
+      {/* Modal: Selector de relación (quick-connect) con búsqueda interactiva */}
+      {showRelationModal && quickConnectSourceUri && pendingConnectionTarget && (() => {
+        const sourceNode = nodes.find(n => n.uri === quickConnectSourceUri);
+        const availableTargetNodes = nodes.filter(n => n.uri !== quickConnectSourceUri);
+        const selectedTargetNode = nodes.find(n => n.uri === pendingConnectionTarget);
 
-            {/* Node pair summary / Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(0,0,0,0.04)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Origen:</span>
-                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                  {nodes.find(n => n.uri === quickConnectSourceUri)?.label || '…'}
-                </span>
+        const filteredTargetNodes = availableTargetNodes.filter(n => {
+          const q = relationTargetSearch.toLowerCase().trim();
+          if (!q) return true;
+          const label = (n.label || '').toLowerCase();
+          const typeStr = getCleanType(n.type, n.thesisType).toLowerCase();
+          const uri = (n.uri || '').toLowerCase();
+          return label.includes(q) || typeStr.includes(q) || uri.includes(q);
+        });
+
+        return (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', justifyContent: 'center',
+            alignItems: 'center', zIndex: 600, backdropFilter: 'blur(4px)'
+          }}>
+            <div style={{
+              background: 'var(--bg-mantle)', padding: '26px', borderRadius: '18px',
+              width: '480px', maxWidth: '94vw', display: 'flex', flexDirection: 'column', gap: '18px',
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+              maxHeight: '92vh',
+              overflowY: 'visible',
+              position: 'relative'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>🔗 Elegir Relación</h2>
+                  {isDev && <span className="dev-tag-badge">#modalElegirRelacion</span>}
+                </div>
+                <button className="btn" onClick={closeRelationModal} title="Cerrar ventana">✕</button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Destino:</label>
-                <select
-                  value={pendingConnectionTarget}
-                  onChange={(e) => setPendingConnectionTarget(e.target.value)}
-                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.82rem' }}
+
+              {/* Resumen Origen & Selector Destino con Búsqueda */}
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: '12px',
+                background: 'rgba(0,0,0,0.04)', padding: '14px 16px', borderRadius: '12px',
+                fontSize: '0.82rem', border: '1px solid var(--border-color)'
+              }}>
+                {/* Origen */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>Origen:</span>
+                  <span style={{ fontSize: '0.95rem' }}>{getNodeTypeIcon(sourceNode?.type)}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                    {sourceNode?.label || '…'}
+                  </span>
+                  {sourceNode && (
+                    <span style={{
+                      fontSize: '0.68rem',
+                      background: 'rgba(0,0,0,0.06)',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      color: 'var(--text-muted)'
+                    }}>
+                      {getCleanType(sourceNode.type, sourceNode.thesisType)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Destino con Búsqueda interactiva */}
+                <div className="searchable-target-node-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
+                      Destino (nodo con el que conectar):
+                    </label>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {availableTargetNodes.length} {availableTargetNodes.length === 1 ? 'nodo' : 'nodos'}
+                    </span>
+                  </div>
+
+                  {/* Botón trigger para expandir opciones */}
+                  <button
+                    type="button"
+                    id="btnSelectPendingConnectionTarget"
+                    aria-label="Destino"
+                    onClick={() => {
+                      setIsRelationTargetOpen(!isRelationTargetOpen);
+                      setIsRelationPredicateOpen(false);
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: `1.5px solid ${isRelationTargetOpen ? 'var(--color-proyecto, #C17F59)' : 'var(--border-color)'}`,
+                      background: 'var(--bg-surface)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.82rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      boxShadow: isRelationTargetOpen ? '0 0 0 2px rgba(193,127,89,0.2)' : 'none',
+                      transition: 'all 0.2s ease',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                      {selectedTargetNode ? (
+                        <>
+                          <span style={{ fontSize: '0.95rem' }}>{getNodeTypeIcon(selectedTargetNode.type)}</span>
+                          <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {selectedTargetNode.label}
+                          </span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            background: 'rgba(0,0,0,0.06)',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            color: 'var(--text-muted)',
+                            flexShrink: 0
+                          }}>
+                            {getCleanType(selectedTargetNode.type, selectedTargetNode.thesisType)}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Seleccionar nodo destino…</span>
+                      )}
+                    </div>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '6px', flexShrink: 0 }}>
+                      {isRelationTargetOpen ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {/* Select nativo accesible sincronizado */}
+                  <select
+                    value={pendingConnectionTarget || ''}
+                    onChange={(e) => setPendingConnectionTarget(e.target.value)}
+                    style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                  >
+                    {availableTargetNodes.map(n => (
+                      <option key={n.uri} value={n.uri}>
+                        {n.label} ({getCleanType(n.type, n.thesisType)})
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Menú desplegable con barra de búsqueda para filtrar nodos */}
+                  {isRelationTargetOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: '4px',
+                      background: 'var(--bg-mantle, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      boxShadow: '0 10px 28px rgba(0,0,0,0.22)',
+                      zIndex: 700,
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      {/* Input de búsqueda interactiva */}
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          id="inputSearchTargetNode"
+                          autoFocus
+                          placeholder="🔍 Buscar por nombre o tipo de nodo..."
+                          value={relationTargetSearch}
+                          onChange={(e) => setRelationTargetSearch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            padding: '7px 28px 7px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-surface)',
+                            color: 'var(--text-main)',
+                            fontSize: '0.8rem',
+                            boxSizing: 'border-box',
+                            outline: 'none'
+                          }}
+                        />
+                        {relationTargetSearch && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRelationTargetSearch('');
+                            }}
+                            style={{
+                              position: 'absolute',
+                              right: '6px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: 'var(--text-muted)',
+                              fontSize: '0.75rem',
+                              padding: '2px 4px'
+                            }}
+                            title="Limpiar búsqueda"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Lista scrollable de nodos filtrados */}
+                      <div style={{
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px'
+                      }}>
+                        {filteredTargetNodes.length === 0 ? (
+                          <div style={{
+                            padding: '14px 8px',
+                            textAlign: 'center',
+                            fontSize: '0.78rem',
+                            color: 'var(--text-muted)'
+                          }}>
+                            No se encontraron nodos coincidentes con "{relationTargetSearch}"
+                          </div>
+                        ) : (
+                          filteredTargetNodes.map(n => {
+                            const isSelected = n.uri === pendingConnectionTarget;
+                            return (
+                              <div
+                                key={n.uri}
+                                className="searchable-node-option"
+                                onClick={() => {
+                                  setPendingConnectionTarget(n.uri);
+                                  setIsRelationTargetOpen(false);
+                                  setRelationTargetSearch('');
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '7px 10px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.8rem',
+                                  background: isSelected ? 'rgba(193,127,89,0.14)' : 'transparent',
+                                  color: 'var(--text-main)',
+                                  transition: 'background 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                  <span style={{ fontSize: '0.95rem' }}>{getNodeTypeIcon(n.type)}</span>
+                                  <span style={{ fontWeight: isSelected ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {n.label}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '0.68rem',
+                                    background: 'rgba(0,0,0,0.06)',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    color: 'var(--text-muted)',
+                                    flexShrink: 0
+                                  }}>
+                                    {getCleanType(n.type, n.thesisType)}
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <span style={{ color: 'var(--color-proyecto, #C17F59)', fontWeight: 700, marginLeft: '6px' }}>✓</span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Pie del menú con contadores */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-muted)',
+                        borderTop: '1px solid var(--border-color)',
+                        paddingTop: '6px',
+                        marginTop: '2px'
+                      }}>
+                        <span>Mostrando {filteredTargetNodes.length} de {availableTargetNodes.length} nodos</span>
+                        {relationTargetSearch && (
+                          <span 
+                            onClick={() => setRelationTargetSearch('')}
+                            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            Limpiar filtro
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selector de Tipo de Relación Semántica con Búsqueda */}
+              <div className="searchable-relation-predicate-container form-group" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.82rem' }}>Tipo de relación semántica</label>
+                </div>
+
+                {/* Botón trigger para expandir opciones de predicados */}
+                <button
+                  type="button"
+                  id="btnSelectRelationPredicate"
+                  onClick={() => {
+                    setIsRelationPredicateOpen(!isRelationPredicateOpen);
+                    setIsRelationTargetOpen(false);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: `1.5px solid ${isRelationPredicateOpen ? 'var(--color-proyecto, #C17F59)' : 'var(--border-color)'}`,
+                    background: 'var(--bg-surface)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.82rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    boxShadow: isRelationPredicateOpen ? '0 0 0 2px rgba(193,127,89,0.2)' : 'none',
+                    transition: 'all 0.2s ease',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}
                 >
-                  {nodes.filter(n => n.uri !== quickConnectSourceUri).map(n => (
-                    <option key={n.uri} value={n.uri}>
-                      {n.label} ({getCleanType(n.type, n.thesisType)})
-                    </option>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--color-proyecto, #C17F59)' }}>
+                      {getPredicateDetails(selectedRelationPredicate).label}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      — {getPredicateDetails(selectedRelationPredicate).desc}
+                    </span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '6px', flexShrink: 0 }}>
+                    {isRelationPredicateOpen ? '▲' : '▼'}
+                  </span>
+                </button>
+
+                {/* Select nativo accesible sincronizado */}
+                <select
+                  value={selectedRelationPredicate}
+                  onChange={(e) => setSelectedRelationPredicate(e.target.value)}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                >
+                  {RELATION_CATEGORIES.map(cat => (
+                    <optgroup key={cat.category} label={cat.category}>
+                      {cat.options.map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label} — {opt.desc}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
+
+                {/* Menú desplegable con barra de búsqueda para filtrar relaciones */}
+                {isRelationPredicateOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    marginTop: '4px',
+                    background: 'var(--bg-mantle, #ffffff)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    boxShadow: '0 10px 28px rgba(0,0,0,0.22)',
+                    zIndex: 700,
+                    padding: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    {/* Input de búsqueda interactiva de relaciones */}
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        id="inputSearchRelationPredicate"
+                        autoFocus
+                        placeholder="🔍 Buscar relación (ej: advisor, venue, autor, mindmap)..."
+                        value={relationPredicateSearch}
+                        onChange={(e) => setRelationPredicateSearch(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          width: '100%',
+                          padding: '7px 28px 7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-surface)',
+                          color: 'var(--text-main)',
+                          fontSize: '0.8rem',
+                          boxSizing: 'border-box',
+                          outline: 'none'
+                        }}
+                      />
+                      {relationPredicateSearch && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRelationPredicateSearch('');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '6px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-muted)',
+                            fontSize: '0.75rem',
+                            padding: '2px 4px'
+                          }}
+                          title="Limpiar búsqueda"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Lista scrollable de relaciones agrupadas por categoría */}
+                    <div style={{
+                      maxHeight: '210px',
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      {(() => {
+                        const q = relationPredicateSearch.toLowerCase().trim();
+                        let matchCount = 0;
+                        const renderedCategories = RELATION_CATEGORIES.map(cat => {
+                          const matchingOpts = cat.options.filter(opt => {
+                            if (!q) return true;
+                            return opt.label.toLowerCase().includes(q) || 
+                                   opt.desc.toLowerCase().includes(q) || 
+                                   opt.value.toLowerCase().includes(q) ||
+                                   cat.category.toLowerCase().includes(q);
+                          });
+                          if (matchingOpts.length === 0) return null;
+                          matchCount += matchingOpts.length;
+
+                          return (
+                            <div key={cat.category} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                color: 'var(--text-muted)',
+                                padding: '4px 6px 2px 6px'
+                              }}>
+                                {cat.category}
+                              </span>
+                              {matchingOpts.map(opt => {
+                                const isSelected = opt.value === selectedRelationPredicate;
+                                return (
+                                  <div
+                                    key={opt.value}
+                                    className="searchable-predicate-option"
+                                    onClick={() => {
+                                      setSelectedRelationPredicate(opt.value);
+                                      setIsRelationPredicateOpen(false);
+                                      setRelationPredicateSearch('');
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      padding: '6px 10px',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.8rem',
+                                      background: isSelected ? 'rgba(193,127,89,0.14)' : 'transparent',
+                                      color: 'var(--text-main)',
+                                      transition: 'background 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                      <span style={{ fontWeight: 600, color: 'var(--color-proyecto, #C17F59)' }}>
+                                        {opt.label}
+                                      </span>
+                                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                        {opt.desc}
+                                      </span>
+                                    </div>
+                                    {isSelected && (
+                                      <span style={{ color: 'var(--color-proyecto, #C17F59)', fontWeight: 700, marginLeft: '6px' }}>✓</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        });
+
+                        if (matchCount === 0) {
+                          return (
+                            <div style={{
+                              padding: '14px 8px',
+                              textAlign: 'center',
+                              fontSize: '0.78rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              No se encontraron relaciones coincidentes con "{relationPredicateSearch}"
+                            </div>
+                          );
+                        }
+
+                        return renderedCategories;
+                      })()}
+                    </div>
+
+                    {relationPredicateSearch && (
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-muted)',
+                        borderTop: '1px solid var(--border-color)',
+                        paddingTop: '6px'
+                      }}>
+                        <span 
+                          onClick={() => setRelationPredicateSearch('')}
+                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          Limpiar filtro
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <button className="btn" onClick={closeRelationModal}>Omitir relación</button>
+                <button className="btn btn-primary" onClick={createRelation}>
+                  Conectar Nodos
+                </button>
               </div>
             </div>
-
-            <div className="form-group">
-              <label style={{ fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px' }}>Tipo de relación semántica</label>
-              <select
-                value={selectedRelationPredicate}
-                onChange={(e) => setSelectedRelationPredicate(e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-main)', fontSize: '0.85rem', width: '100%' }}
-              >
-                <optgroup label="Publicaciones y Venues (Conferencias / Revistas)">
-                  <option value="http://vivoweb.org/ontology/core#hasPublicationVenue">vivo:hasPublicationVenue — Venue / Lugar oficial en la ontología VIVO</option>
-                  <option value="http://vivoweb.org/ontology/core#publicationVenue">vivo:publicationVenue — Venue / Lugar de publicación planificado u oficial</option>
-                  <option value="http://purl.org/ontology/bibo/presentedAt">bibo:presentedAt — Presentado o a presentar en conferencia</option>
-                  <option value="https://dblp.org/rdf/schema#publishedIn">dblp:publishedIn — Publicado o a enviar en revista/conferencia</option>
-                  <option value="http://cientopolis.org/rfu/targetVenue">rfu:targetVenue — Venue objetivo de envío (Planificación)</option>
-                </optgroup>
-                <optgroup label="VIVO (académico)">
-                  <option value="http://vivoweb.org/ontology/core#advisor">vivo:advisor — Director de tesis</option>
-                  <option value="http://vivoweb.org/ontology/core#hasMember">vivo:hasMember — Miembro de proyecto</option>
-                  <option value="http://vivoweb.org/ontology/core#relatedBy">vivo:relatedBy — Relación genérica</option>
-                  <option value="http://vivoweb.org/ontology/core#supportedInformationResource">vivo:supportedInformationResource — Produce paper</option>
-                  <option value="http://vivoweb.org/ontology/core#hasCollaborator">vivo:hasCollaborator — Colabora con</option>
-                </optgroup>
-                <optgroup label="DBLP / Bibliográfico">
-                  <option value="https://dblp.org/rdf/schema#authoredBy">dblp:authoredBy — Autoría de paper</option>
-                </optgroup>
-                <optgroup label="RFU (proyecto)">
-                  <option value="http://cientopolis.org/rfu/hasMindmap">rfu:hasMindmap — Mapa mental de</option>
-                  <option value="http://cientopolis.org/rfu/collaboratesWith">rfu:collaboratesWith — Colabora con</option>
-                  <option value="http://cientopolis.org/rfu/supervises">rfu:supervises — Supervisa</option>
-                  <option value="http://cientopolis.org/rfu/partOf">rfu:partOf — Parte de</option>
-                  <option value="http://cientopolis.org/rfu/researchedIn">rfu:researchedIn — Investigado en</option>
-                </optgroup>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={() => {
-                setShowRelationModal(false);
-                setQuickConnectSourceUri(null);
-                setPendingConnectionTarget(null);
-              }}>Omitir relación</button>
-              <button className="btn btn-primary" onClick={createRelation}>
-                Conectar Nodos
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal Configuración General */}
       {showConfigModal && (

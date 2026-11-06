@@ -1403,4 +1403,144 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
     });
   });
+
+  it('debe permitir buscar y filtrar nodos y relaciones en la ventana Elegir Relación', async () => {
+    localStorage.clear();
+    let insertQuerySent = '';
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
+                  label: { value: 'Diego Torres' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' },
+                  type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                  label: { value: 'Carine Breidy' },
+                  x: { value: '400' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/PaperISWC' },
+                  type: { value: 'http://purl.org/ontology/bibo/AcademicArticle' },
+                  label: { value: 'Paper ISWC 2026' },
+                  x: { value: '700' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('SELECT DISTINCT ?from ?predicate ?to')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: { bindings: [] }
+          })
+        });
+      }
+
+      if (query.includes('INSERT DATA')) {
+        insertQuerySent = query;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Esperar a que se rendericen los nodos
+    await waitFor(() => {
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+      expect(screen.getByText('Paper ISWC 2026')).toBeInTheDocument();
+    });
+
+    // Abrir modal "Elegir Relación" usando el botón quick-connect del nodo Diego Torres
+    const connectButtons = screen.getAllByTitle('Vincular con un nodo existente en el lienzo');
+    expect(connectButtons.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(connectButtons[0]);
+
+    // Verificar que se abre la ventana Elegir Relación
+    await waitFor(() => {
+      expect(screen.getByText(/🔗 Elegir Relación/i)).toBeInTheDocument();
+    });
+
+    // Expandir las opciones de nodo destino
+    const selectTargetBtn = screen.getByRole('button', { name: /Destino/i });
+    fireEvent.click(selectTargetBtn);
+
+    // Debe mostrar la barra de búsqueda de nodo destino
+    const targetSearchInput = screen.getByPlaceholderText(/Buscar por nombre o tipo de nodo/i);
+    expect(targetSearchInput).toBeInTheDocument();
+
+    // Filtrar por "ISWC"
+    fireEvent.change(targetSearchInput, { target: { value: 'ISWC' } });
+
+    // Debe mostrar Paper ISWC 2026 en la lista filtrada y no mostrar Carine Breidy
+    const optionMatches = document.querySelectorAll('.searchable-node-option');
+    expect(optionMatches.length).toBe(1);
+    expect(optionMatches[0]).toHaveTextContent('Paper ISWC 2026');
+
+    // Seleccionar Paper ISWC 2026
+    fireEvent.click(optionMatches[0]);
+
+    // Expandir las opciones de tipo de relación semántica
+    const selectPredBtn = document.getElementById('btnSelectRelationPredicate');
+    expect(selectPredBtn).not.toBeNull();
+    fireEvent.click(selectPredBtn!);
+
+    // Debe mostrar la barra de búsqueda de relación
+    const predSearchInput = screen.getByPlaceholderText(/Buscar relación/i);
+    expect(predSearchInput).toBeInTheDocument();
+
+    // Filtrar por "advisor"
+    fireEvent.change(predSearchInput, { target: { value: 'advisor' } });
+
+    // Debe mostrar la opción vivo:advisor
+    const predOptionMatches = document.querySelectorAll('.searchable-predicate-option');
+    expect(predOptionMatches.length).toBe(1);
+    expect(predOptionMatches[0]).toHaveTextContent('vivo:advisor');
+
+    // Seleccionar vivo:advisor
+    fireEvent.click(predOptionMatches[0]);
+
+    // Hacer clic en Conectar Nodos
+    const connectBtn = screen.getByRole('button', { name: /Conectar Nodos/i });
+    fireEvent.click(connectBtn);
+
+    // Verificar que se envió la consulta SPARQL con el destino y la relación filtrados
+    await waitFor(() => {
+      expect(insertQuerySent).toContain('<http://vivoweb.org/ontology/core#advisor>');
+      expect(insertQuerySent).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/PaperISWC>');
+    });
+  });
 });
