@@ -124,7 +124,20 @@ Levanta ambos servidores para disfrutar del Hot Module Replacement (HMR) y desar
 
 ## 🎨 Funcionalidades Destacadas del Canvas
 
-*   **Lienzo Infinito Claro (Light Mode)**: Diseño premium basado en el esquema *Catppuccin Latte*, optimizado para contraste en entornos iluminados con una grilla de puntos interactiva.
+*   **Selector de Temas Visuales del Lienzo (`#btnSelectorTema`)**:
+    *   Permite alternar instantáneamente entre **5 paletas de color curadas** con persistencia automática en `localStorage` (`canvas_theme`):
+        1. **☀️ DireAtento Clásico (`classic`)**: Marfil editorial claro con acentos azul noche y cobre cálido.
+        2. **🌙 Noche Científica (`dark-slate`)**: Pizarra oscura de baja fatiga visual (`#0B1120`), acento cian brillante (`#38BDF8`) y tarjetas en pizarra profunda (`#1E293B`) con texto claro de alto contraste.
+        3. **📜 Manuscrito Sepia (`warm-sepia`)**: Estilo pergamino cálido (`#ECE3CF`), conectores terracota/nogal y tarjetas marfil crema (`#FEFAF0`).
+        4. **🌿 Menta Nórdica (`fresh-sage`)**: Verde salvia nórdico relajante (`#E5ECE9`), conectores pino (`#52796F`) y tarjetas suaves (`#F8FCFA`).
+        5. **🔳 Monocromo Minimalista (`monochrome`)**: Fondo blanco neutro (`#F3F4F6`), nodos blancos nítidos y alto contraste para foco extremo.
+    *   Sincroniza dinámicamente el fondo del lienzo `#canvasMain`, la cuadrícula de puntos, las aristas y flechas SVG (`marker#arrow`), las etiquetas badge flotantes y todas las tarjetas de nodo según su tipo ontológico.
+*   **Modo Foco para Flechas y Aristas Semánticas (`#btnModoFoco`)**:
+    *   Controla la proliferación visual de aristas en grafos con alta densidad de conexiones.
+    *   En **Modo Foco**, las flechas se contraen al nodo origen y se expanden dinámicamente bajo demanda al pasar el cursor (hover), seleccionar el nodo o arista, o fijar un nodo.
+*   **Búsqueda y Filtro en Selección de Relaciones Semánticas**:
+    *   En el modal "Elegir Relación", incluye campos de búsqueda en tiempo real tanto para filtrar entre la totalidad de nodos destino del grafo como para filtrar entre los predicados y ontologías sugeridas.
+*   **Lienzo Infinito y Navegación Espacial**: Diseño optimizado con paneo, zoom y grilla de puntos interactiva adaptada al tema activo.
 *   **Deduplicación Semántica**: Si un recurso del Triplestore posee múltiples tipos RDF redundantes, el canvas renderiza una **única tarjeta unificada** priorizando los tipos de la ontología `VIVO`.
 *   **Interacción de Conexión Inteligente**: Al hacer clic en "Conectar Nodos", el sistema sugiere los predicados correctos basándose en las clases origen y destino:
     *   `Investigador` $\rightarrow$ `Tesista`: sugiere `vivo:advisor`.

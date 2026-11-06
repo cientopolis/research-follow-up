@@ -46,6 +46,85 @@
   --border-focus: #C17F59;
 }
 
+/* ==========================================================================
+   CANVAS THEMES (Alternativa 1: Presets Curados)
+   ========================================================================== */
+
+/* 1. DireAtento Clásico (Por Defecto) */
+[data-canvas-theme="classic"], :root {
+  --canvas-bg: #E2E8F0;
+  --canvas-dot-major: rgba(0, 0, 0, 0.05);
+  --canvas-dot-minor: rgba(0, 0, 0, 0.02);
+  --canvas-edge-stroke: #718096;
+  --canvas-edge-hover: #C17F59;
+  --canvas-edge-selected: #C17F59;
+  --canvas-edge-badge-bg: #FFFFFF;
+  --canvas-edge-badge-border: #CBD5E1;
+  --canvas-edge-badge-stroke: #CBD5E1;
+  --canvas-edge-badge-text: #334155;
+  --canvas-arrow-color: #8C8FA1;
+}
+
+/* 2. Noche Científica (Dark Slate) */
+[data-canvas-theme="dark-slate"] {
+  --canvas-bg: #0B1120;
+  --canvas-dot-major: rgba(148, 163, 184, 0.18);
+  --canvas-dot-minor: rgba(148, 163, 184, 0.08);
+  --canvas-edge-stroke: #64748B;
+  --canvas-edge-hover: #38BDF8;
+  --canvas-edge-selected: #38BDF8;
+  --canvas-edge-badge-bg: #1E293B;
+  --canvas-edge-badge-border: #475569;
+  --canvas-edge-badge-stroke: #475569;
+  --canvas-edge-badge-text: #F1F5F9;
+  --canvas-arrow-color: #38BDF8;
+}
+
+/* 3. Manuscrito Sepia (Warm Sepia) */
+[data-canvas-theme="warm-sepia"] {
+  --canvas-bg: #ECE3CF;
+  --canvas-dot-major: rgba(101, 67, 33, 0.10);
+  --canvas-dot-minor: rgba(101, 67, 33, 0.04);
+  --canvas-edge-stroke: #8D6E63;
+  --canvas-edge-hover: #B25E29;
+  --canvas-edge-selected: #B25E29;
+  --canvas-edge-badge-bg: #FEFAF0;
+  --canvas-edge-badge-border: #D7CCC8;
+  --canvas-edge-badge-stroke: #D7CCC8;
+  --canvas-edge-badge-text: #3E2723;
+  --canvas-arrow-color: #8D6E63;
+}
+
+/* 4. Menta Nórdica (Fresh Sage) */
+[data-canvas-theme="fresh-sage"] {
+  --canvas-bg: #E5ECE9;
+  --canvas-dot-major: rgba(27, 67, 50, 0.08);
+  --canvas-dot-minor: rgba(27, 67, 50, 0.03);
+  --canvas-edge-stroke: #52796F;
+  --canvas-edge-hover: #1B4332;
+  --canvas-edge-selected: #1B4332;
+  --canvas-edge-badge-bg: #F8FCFA;
+  --canvas-edge-badge-border: #B7CECE;
+  --canvas-edge-badge-stroke: #B7CECE;
+  --canvas-edge-badge-text: #1B4332;
+  --canvas-arrow-color: #52796F;
+}
+
+/* 5. Monocromo Minimalista (High Contrast) */
+[data-canvas-theme="monochrome"] {
+  --canvas-bg: #F3F4F6;
+  --canvas-dot-major: rgba(0, 0, 0, 0.12);
+  --canvas-dot-minor: rgba(0, 0, 0, 0.04);
+  --canvas-edge-stroke: #6B7280;
+  --canvas-edge-hover: #2563EB;
+  --canvas-edge-selected: #2563EB;
+  --canvas-edge-badge-bg: #FFFFFF;
+  --canvas-edge-badge-border: #9CA3AF;
+  --canvas-edge-badge-stroke: #9CA3AF;
+  --canvas-edge-badge-text: #111827;
+  --canvas-arrow-color: #4B5563;
+}
+
 body, html, #root {
   margin: 0;
   padding: 0;
@@ -63,12 +142,13 @@ body, html, #root {
   overflow: hidden;
   cursor: grab;
   user-select: none;
-  background-color: var(--bg-crust);
+  background-color: var(--canvas-bg, var(--bg-crust));
   background-image: 
-    radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-    radial-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+    radial-gradient(var(--canvas-dot-major, rgba(0, 0, 0, 0.05)) 1px, transparent 1px),
+    radial-gradient(var(--canvas-dot-minor, rgba(0, 0, 0, 0.02)) 1px, transparent 1px);
   background-size: 40px 40px, 10px 10px;
   background-position: 0 0, 0 0;
+  transition: background-color 0.25s ease;
 }
 
 #canvasMain:active {
@@ -263,7 +343,7 @@ body, html, #root {
 /* Connectors */
 .edge-connector-path {
   fill: none;
-  stroke: var(--text-muted);
+  stroke: var(--canvas-edge-stroke, var(--text-muted));
   stroke-width: 2.5;
   transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.2s ease, stroke-width 0.2s ease;
   pointer-events: stroke;
@@ -271,12 +351,12 @@ body, html, #root {
 }
 
 .edge-connector-path:hover {
-  stroke: var(--accent);
+  stroke: var(--canvas-edge-hover, var(--accent));
   stroke-width: 4;
 }
 
 .edge-connector-path.selected {
-  stroke: var(--accent);
+  stroke: var(--canvas-edge-selected, var(--accent));
   stroke-width: 4;
 }
 

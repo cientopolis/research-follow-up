@@ -1543,4 +1543,75 @@ describe('App Canvas Component Tests', () => {
       expect(insertQuerySent).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/PaperISWC>');
     });
   });
+
+  it('debe permitir seleccionar temas de color para el lienzo (Alternativa 1: Presets Curados) y persistir en localStorage', async () => {
+    localStorage.clear();
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {
+          query = options.body.toString();
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dire')).toBeInTheDocument();
+    });
+
+    // Verificar que el botón selector de tema existe con el tema por defecto (DireAtento Clásico)
+    const btnSelectorTema = document.getElementById('btnSelectorTema');
+    expect(btnSelectorTema).not.toBeNull();
+    expect(btnSelectorTema).toHaveTextContent('DireAtento Clásico');
+
+    // Verificar que el lienzo tiene el atributo del tema por defecto
+    const canvasMain = document.getElementById('canvasMain');
+    expect(canvasMain).not.toBeNull();
+    expect(canvasMain).toHaveAttribute('data-canvas-theme', 'classic');
+
+    // Abrir el menú de temas
+    fireEvent.click(btnSelectorTema!);
+
+    const dropdownMenuTemas = document.getElementById('dropdownMenuTemas');
+    expect(dropdownMenuTemas).toBeInTheDocument();
+    expect(screen.getByText('Noche Científica')).toBeInTheDocument();
+    expect(screen.getByText('Manuscrito Sepia')).toBeInTheDocument();
+    expect(screen.getByText('Menta Nórdica')).toBeInTheDocument();
+    expect(screen.getByText('Monocromo Minimalista')).toBeInTheDocument();
+
+    // Seleccionar "Noche Científica"
+    const darkSlateBtn = document.querySelector('[data-theme-id="dark-slate"]');
+    expect(darkSlateBtn).not.toBeNull();
+    fireEvent.click(darkSlateBtn!);
+
+    // Verificar que se actualizó el atributo en el lienzo y en localStorage
+    expect(canvasMain).toHaveAttribute('data-canvas-theme', 'dark-slate');
+    expect(localStorage.getItem('canvas_theme')).toBe('dark-slate');
+    expect(btnSelectorTema).toHaveTextContent('Noche Científica');
+
+    // El menú debe haberse cerrado
+    expect(document.getElementById('dropdownMenuTemas')).toBeNull();
+
+    // Cambiar a "Manuscrito Sepia"
+    fireEvent.click(btnSelectorTema!);
+    const sepiaBtn = document.querySelector('[data-theme-id="warm-sepia"]');
+    expect(sepiaBtn).not.toBeNull();
+    fireEvent.click(sepiaBtn!);
+
+    expect(canvasMain).toHaveAttribute('data-canvas-theme', 'warm-sepia');
+    expect(localStorage.getItem('canvas_theme')).toBe('warm-sepia');
+    expect(btnSelectorTema).toHaveTextContent('Manuscrito Sepia');
+  });
 });
