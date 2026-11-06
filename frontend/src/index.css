@@ -265,7 +265,7 @@ body, html, #root {
   fill: none;
   stroke: var(--text-muted);
   stroke-width: 2.5;
-  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.2s ease, stroke-width 0.2s ease;
   pointer-events: stroke;
   cursor: pointer;
 }
@@ -278,6 +278,17 @@ body, html, #root {
 .edge-connector-path.selected {
   stroke: var(--accent);
   stroke-width: 4;
+}
+
+/* Node Edges Hub Badge (Alternativa 4: Contraer/Expandir al origen) */
+.node-edges-hub-badge {
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.node-edges-hub-badge:hover {
+  transform: scale(1.08) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18) !important;
 }
 
 /* Edge Labels (Predicates) */

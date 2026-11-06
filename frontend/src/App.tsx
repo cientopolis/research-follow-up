@@ -169,6 +169,16 @@ export default function App() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState<RDFNode | null>(null);
 
+  // Focus Mode / On-Demand Collapsed Edges state (Alternative 4)
+  const [focusMode, setFocusMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('canvas_focus_mode') === 'true';
+    }
+    return false;
+  });
+  const [hoveredNodeUri, setHoveredNodeUri] = useState<string | null>(null);
+  const [pinnedNodeUris, setPinnedNodeUris] = useState<string[]>([]);
+
   // Global Inference Toggle state (default false / off)
   const [useInference, setUseInference] = useState<boolean>(false);
   // Active GraphDB Inference Engine (ruleset) state: 'rdfsplus-optimized' vs 'owl-max-optimized' (OWL-DL)
@@ -1503,9 +1513,15 @@ SELECT ?s ?p ?o WHERE {
 
   // Canvas Pan & Zoom Handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains('canvas-viewport')) {
+    if (
+      e.target === canvasRef.current || 
+      (e.target as HTMLElement).classList.contains('canvas-viewport') ||
+      (e.target as HTMLElement).classList.contains('canvas-connections')
+    ) {
       setIsPanning(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      setSelectedNode(null);
+      setSelectedConnection(null);
     }
   };
 
@@ -2273,14 +2289,47 @@ SELECT ?s ?p ?o WHERE {
           </div>
 
           {currentView === 'canvas' && (
-            <div style={{ position: 'relative' }}>
-              {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
-              <button className="btn btn-primary" onClick={() => {
-                setEditingCatalogNode(null);
-                setShowNewNodeModal(true);
-                fetchGlobalCatalog(newNodeData.type);
-              }}>+ Agregar Nodo</button>
-            </div>
+            <>
+              <div style={{ position: 'relative' }}>
+                {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnAgregarNodo</span>}
+                <button className="btn btn-primary" onClick={() => {
+                  setEditingCatalogNode(null);
+                  setShowNewNodeModal(true);
+                  fetchGlobalCatalog(newNodeData.type);
+                }}>+ Agregar Nodo</button>
+              </div>
+
+              <div style={{ position: 'relative' }}>
+                {isDev && <span className="dev-tag-badge" style={{ top: '-18px' }}>#btnModoFoco</span>}
+                <button 
+                  id="btnToggleModoFoco"
+                  className={`btn ${focusMode ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.8rem',
+                    padding: '6px 12px',
+                    backgroundColor: focusMode ? 'var(--color-proyecto, #C17F59)' : 'var(--bg-surface)',
+                    color: focusMode ? '#ffffff' : 'var(--text-main)',
+                    border: '1px solid var(--border-color)',
+                    fontWeight: 600,
+                    boxShadow: focusMode ? '0 2px 8px rgba(193,127,89,0.25)' : 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onClick={() => {
+                    const next = !focusMode;
+                    setFocusMode(next);
+                    localStorage.setItem('canvas_focus_mode', String(next));
+                  }}
+                  title={focusMode 
+                    ? "Modo Foco activo: Las flechas se contraen al origen y se expanden al interactuar o pasar el mouse. Clic para mostrar todas." 
+                    : "Modo Normal: Mostrando todas las flechas. Clic para activar el Modo Foco (contraer flechas al origen)."}
+                >
+                  <span>{focusMode ? '🎯 Modo Foco: Activo' : '🌐 Flechas: Todas'}</span>
+                </button>
+              </div>
+            </>
           )}
 
           {currentView === 'canvas' && nodes.length === 0 && (
@@ -2527,6 +2576,16 @@ SELECT ?s ?p ?o WHERE {
                 
                 if (!fromNode || !toNode) return null;
 
+                // Focus Mode (Alternativa 4): Expand on demand if from or to is selected, hovered, pinned, or connection selected
+                const isConnSelected = selectedConnection?.id === conn.id;
+                const isFromActive = (selectedNode?.uri === conn.from) || (hoveredNodeUri === conn.from) || pinnedNodeUris.includes(conn.from);
+                const isToActive = (selectedNode?.uri === conn.to) || (hoveredNodeUri === conn.to) || pinnedNodeUris.includes(conn.to);
+                const isEdgeExpanded = !focusMode || isConnSelected || isFromActive || isToActive;
+
+                if (!isEdgeExpanded) {
+                  return null;
+                }
+
                 const pairKey = [conn.from, conn.to].sort().join(':::');
                 const siblingConns = pairGroups[pairKey] || [conn];
                 const multiIndex = siblingConns.findIndex(c => c.id === conn.id);
@@ -2667,6 +2726,13 @@ SELECT ?s ?p ?o WHERE {
             const isSelf = node.uri === associatedResearcher;
             const nodeDomId = getNodeComponentId(node.type, node.thesisType);
 
+            // Outgoing connections calculation for Focus Mode Hub
+            const outgoingConnections = connections.filter(c => c.from === node.uri);
+            const outgoingCount = outgoingConnections.length;
+            const isNodeHovered = hoveredNodeUri === node.uri;
+            const isNodePinned = pinnedNodeUris.includes(node.uri);
+            const isNodeActive = isSelected || isNodeHovered || isNodePinned;
+
             // Tinted Chips palette — Harmonized with DireAtento Brand Palette (Azul Noche, Cobre Cálido, Verde Menta)
             const chipPalette: Record<string, { bg: string; chipColor: string; titleColor: string; tagBg: string; tagColor: string }> = {
               nodeInvestigador:   { bg: 'rgba(237, 242, 247, 0.95)', chipColor: '#1A2B48', titleColor: '#1A2B48', tagBg: 'rgba(26,43,72,0.12)',   tagColor: '#1A2B48' },
@@ -2697,6 +2763,8 @@ SELECT ?s ?p ?o WHERE {
                 ref={(el) => nodeRef(el, node.uri)}
                 id={node.uri}
                 className={`node-card ${isSelected ? 'selected' : ''}`}
+                onMouseEnter={() => setHoveredNodeUri(node.uri)}
+                onMouseLeave={() => setHoveredNodeUri(null)}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px)`,
                   background: chip.bg,
@@ -2947,6 +3015,55 @@ SELECT ?s ?p ?o WHERE {
                     title="Visualizar las notas tomadas en la reunión y la asistencia"
                   >
                     📋 Ver Notas y Asistencia
+                  </button>
+                )}
+
+                {/* Focus Mode Outgoing Hub Badge (Alternativa 4: contraer/expandir al origen) */}
+                {focusMode && outgoingCount > 0 && (
+                  <button
+                    type="button"
+                    className="node-edges-hub-badge"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinnedNodeUris(prev => 
+                        prev.includes(node.uri) 
+                          ? prev.filter(u => u !== node.uri)
+                          : [...prev, node.uri]
+                      );
+                    }}
+                    title={isNodePinned 
+                      ? `Desfijar flechas (${outgoingCount} relaciones). Clic para contraer al origen.`
+                      : isNodeActive
+                        ? `Fijar flechas desplegadas (${outgoingCount} relaciones).`
+                        : `Expandir ${outgoingCount} flecha${outgoingCount === 1 ? '' : 's'} hacia sus destinos.`}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      bottom: '-11px',
+                      zIndex: 15,
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer',
+                      background: isNodePinned 
+                        ? 'var(--color-proyecto, #C17F59)' 
+                        : isNodeActive 
+                          ? 'var(--color-investigador, #1A2B48)' 
+                          : 'var(--bg-surface, #ffffff)',
+                      color: isNodePinned || isNodeActive ? '#ffffff' : 'var(--text-main, #1A2B48)',
+                      border: `1.5px solid ${isNodePinned ? 'var(--color-proyecto, #C17F59)' : chip.chipColor}`,
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    <span>{isNodePinned ? '📌' : isNodeActive ? '👁️' : '↗'}</span>
+                    <span>{outgoingCount} {outgoingCount === 1 ? 'relación' : 'relaciones'}</span>
                   </button>
                 )}
               </div>

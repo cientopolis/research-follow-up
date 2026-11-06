@@ -1282,4 +1282,125 @@ describe('App Canvas Component Tests', () => {
       )).toBe(true);
     });
   });
+
+  it('debe permitir activar el Modo Foco (Alternativa 4) para contraer flechas al origen y expandirlas bajo demanda por hover, selección o pin', async () => {
+    localStorage.clear();
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      let query = '';
+      if (options && options.body) {
+        try {
+          const body = JSON.parse(options.body);
+          query = body.query || '';
+        } catch (e) {}
+      }
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  type: { value: 'http://vivoweb.org/ontology/core#FacultyMember' },
+                  label: { value: 'Diego Torres' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' },
+                  type: { value: 'http://vivoweb.org/ontology/core#GraduateStudent' },
+                  label: { value: 'Carine Breidy' },
+                  x: { value: '400' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('SELECT DISTINCT ?from ?predicate ?to')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  from: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/DiegoTorres' },
+                  predicate: { value: 'http://vivoweb.org/ontology/core#advisor' },
+                  to: { value: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    // Esperar a que se rendericen los nodos y la conexión
+    await waitFor(() => {
+      expect(screen.getByText('Diego Torres')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+      expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
+    });
+
+    // El botón de Modo Foco está inicialmente en modo normal (Flechas: Todas)
+    const toggleBtn = screen.getByRole('button', { name: /Flechas: Todas/i });
+    expect(toggleBtn).toBeInTheDocument();
+
+    // Activar Modo Foco
+    fireEvent.click(toggleBtn);
+    expect(screen.getByText(/Modo Foco: Activo/i)).toBeInTheDocument();
+
+    // En Modo Foco sin selección ni hover, la flecha vivo:advisor se contrae al origen
+    await waitFor(() => {
+      expect(screen.queryByText('vivo:advisor')).toBeNull();
+    });
+
+    // Debe mostrar la insignia/badge en el nodo de origen Diego Torres (1 relación saliente)
+    const hubBadges = screen.getAllByRole('button').filter(b => b.classList.contains('node-edges-hub-badge'));
+    expect(hubBadges.length).toBeGreaterThanOrEqual(1);
+    expect(hubBadges[0]).toHaveTextContent(/1 relación/i);
+
+    // Al pasar el mouse sobre el nodo Diego Torres (hover), la flecha se expande
+    const diegoNode = screen.getByText('Diego Torres').closest('.node-card');
+    expect(diegoNode).not.toBeNull();
+    fireEvent.mouseEnter(diegoNode!);
+
+    await waitFor(() => {
+      expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
+    });
+
+    // Al salir con el mouse (mouseLeave), vuelve a contraerse
+    fireEvent.mouseLeave(diegoNode!);
+    await waitFor(() => {
+      expect(screen.queryByText('vivo:advisor')).toBeNull();
+    });
+
+    // Al hacer clic en el badge del hub, se fija (pin) la relación
+    fireEvent.click(hubBadges[0]);
+    await waitFor(() => {
+      expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
+      expect(hubBadges[0]).toHaveTextContent('📌');
+    });
+
+    // Desactivar Modo Foco vuelve a mostrar todas las flechas
+    const focoActiveBtn = screen.getByRole('button', { name: /Modo Foco: Activo/i });
+    fireEvent.click(focoActiveBtn);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Flechas: Todas/i })).toBeInTheDocument();
+      expect(screen.getByText('vivo:advisor')).toBeInTheDocument();
+    });
+  });
 });
