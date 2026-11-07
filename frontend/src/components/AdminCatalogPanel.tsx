@@ -84,6 +84,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
   const [showLifiaImportModal, setShowLifiaImportModal] = useState(false);
   const [lifiaMembers, setLifiaMembers] = useState<LifiaMemberItem[]>([]);
   const [loadingLifia, setLoadingLifia] = useState(false);
+  const [lifiaImportError, setLifiaImportError] = useState<string | null>(null);
   const [lifiaSearch, setLifiaSearch] = useState('');
   const [lifiaRoleFilter, setLifiaRoleFilter] = useState<'all' | 'FacultyMember' | 'GraduateStudent' | 'UndergraduateStudent'>('all');
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
@@ -95,6 +96,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
   const openLifiaImportModal = async (forceRefresh = false) => {
     setShowLifiaImportModal(true);
     setLoadingLifia(true);
+    setLifiaImportError(null);
     setImportSuccessMsg(null);
 
     try {
@@ -140,9 +142,13 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
         });
         setTypeOverrides(initialTypes);
         setSelectedSlugs(initialSelected.size > 0 ? initialSelected : new Set(members.map(m => m.slug)));
+      } else {
+        const errData = await lifiaRes.json().catch(() => ({}));
+        setLifiaImportError(errData.error || 'No se pudo obtener el listado de miembros desde https://memorias.lifia.ar/members.');
       }
     } catch (e) {
       console.error('Error al consultar directorio Memorias@LIFIA:', e);
+      setLifiaImportError('Error de red al consultar https://memorias.lifia.ar/members.');
     } finally {
       setLoadingLifia(false);
     }
@@ -1091,7 +1097,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                   🏛️ Carga Automática de Personas desde Memorias@LIFIA
                 </h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Sincroniza integrantes desde <a href="https://memorias.lifia.info.unlp.edu.ar/members" target="_blank" rel="noopener noreferrer" style={{ color: '#1e66f5' }}>memorias.lifia.info.unlp.edu.ar/members</a> hacia el catálogo global de GraphDB (solo URLs externas, sin archivos binarios).
+                  Sincroniza integrantes desde <a href="https://memorias.lifia.ar/members" target="_blank" rel="noopener noreferrer" style={{ color: '#1e66f5' }}>https://memorias.lifia.ar/members</a> hacia el catálogo global de GraphDB (solo URLs externas, sin archivos binarios).
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1106,6 +1112,16 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
                 <button className="btn btn-sm" onClick={() => setShowLifiaImportModal(false)}>✕</button>
               </div>
             </div>
+
+            {lifiaImportError && (
+              <div style={{
+                padding: '10px 14px', borderRadius: '10px',
+                background: 'rgba(210, 15, 57, 0.12)', color: '#d20f39',
+                border: '1px solid rgba(210, 15, 57, 0.3)', fontSize: '0.85rem', fontWeight: 600
+              }}>
+                ⚠️ {lifiaImportError}
+              </div>
+            )}
 
             {importSuccessMsg && (
               <div style={{
@@ -1179,7 +1195,7 @@ export const AdminCatalogPanel: React.FC<AdminCatalogPanelProps> = ({
             {/* Lista de Personas de Memorias@LIFIA */}
             {loadingLifia ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                ⏳ Consultando integrantes en memorias.lifia.info.unlp.edu.ar/members...
+                ⏳ Consultando integrantes en https://memorias.lifia.ar/members...
               </div>
             ) : (
               <div style={{

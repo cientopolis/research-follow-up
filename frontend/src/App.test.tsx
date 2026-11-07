@@ -355,6 +355,102 @@ describe('App Canvas Component Tests', () => {
     expect(deleteExecuted).toBe(true);
   });
 
+  it('debe quitar del lienzo los nodos del catálogo compartido (incluso siendo SuperAdmin) y borrar por completo los nodos específicos del lienzo', async () => {
+    const executedDeleteQueries: string[] = [];
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      if (url === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ isSuperAdmin: true })
+        });
+      }
+      const body = options?.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
+
+      if (query.includes('SELECT DISTINCT ?node')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: {
+              bindings: [
+                {
+                  node: { value: 'http://example.org/resource/ISWC2026' },
+                  type: { value: 'http://purl.org/ontology/bibo/Conference' },
+                  label: { value: 'ISWC 2026' },
+                  x: { value: '100' },
+                  y: { value: '100' }
+                },
+                {
+                  node: { value: 'http://example.org/resource/MyDraftPaper' },
+                  type: { value: 'http://purl.org/ontology/bibo/DocumentDraft' },
+                  label: { value: 'Mi Paper en Borrador' },
+                  x: { value: '300' },
+                  y: { value: '100' }
+                }
+              ]
+            }
+          })
+        });
+      }
+
+      if (query.includes('DELETE')) {
+        executedDeleteQueries.push(query);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('ISWC 2026')).toBeInTheDocument();
+      expect(screen.getByText('Mi Paper en Borrador')).toBeInTheDocument();
+    });
+
+    // 1. Eliminar nodo del catálogo compartido (ISWC 2026) -> solo se quita del lienzo
+    const inspectBtns = screen.getAllByTitle('Ver detalles / Configurar nodo');
+    fireEvent.click(inspectBtns[0]);
+
+    const deleteBtn1 = await screen.findByText('🗑️ Eliminar Nodo');
+    fireEvent.click(deleteBtn1);
+
+    expect(screen.getByText(/catálogo compartido/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Aceptar'));
+
+    await waitFor(() => {
+      expect(executedDeleteQueries.length).toBe(1);
+    });
+    expect(executedDeleteQueries[0]).toContain('DELETE DATA');
+    expect(executedDeleteQueries[0]).toContain('rfu:inCanvasOf');
+    expect(executedDeleteQueries[0]).not.toContain('ex:posX ?x');
+    expect(executedDeleteQueries[0]).not.toContain('DELETE WHERE { <http://example.org/resource/ISWC2026> ?p ?o . }');
+
+    // 2. Eliminar nodo específico del lienzo (Mi Paper en Borrador) -> se borra completamente
+    const inspectBtnsAfter = screen.getAllByTitle('Ver detalles / Configurar nodo');
+    fireEvent.click(inspectBtnsAfter[1]);
+
+    const deleteBtn2 = await screen.findByText('🗑️ Eliminar Nodo');
+    fireEvent.click(deleteBtn2);
+
+    expect(screen.getByText(/específico de tu lienzo/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Aceptar'));
+
+    await waitFor(() => {
+      expect(executedDeleteQueries.length).toBe(2);
+    });
+    expect(executedDeleteQueries[1]).toContain('DELETE WHERE { <http://example.org/resource/MyDraftPaper> ?p ?o . }');
+    expect(executedDeleteQueries[1]).toContain('DELETE WHERE { ?s ?p <http://example.org/resource/MyDraftPaper> . }');
+  });
+
   it('debe permitir abrir el modal + Agregar Nodo sin errores en modo SuperAdmin', async () => {
     if (auth.currentUser) {
       (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
@@ -472,6 +568,108 @@ describe('App Canvas Component Tests', () => {
       expect(screen.getByText('Tópicos CSO')).toBeInTheDocument();
       expect(screen.getByText('International Semantic Web Conference 2026')).toBeInTheDocument();
     });
+  });
+
+  it('debe permitir la Carga Automática de Personas desde Memorias@LIFIA (https://memorias.lifia.ar/members) y sincronizarlas en GraphDB', async () => {
+    if (auth.currentUser) {
+      (auth.currentUser as any).getIdTokenResult = vi.fn().mockResolvedValue({ claims: { admin: true, superadmin: true } });
+    }
+
+    const executedSparqlUpdates: string[] = [];
+    let lifiaEndpointCalled = false;
+
+    const fetchMock = vi.fn().mockImplementation((url, options) => {
+      if (url === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ isSuperAdmin: true })
+        });
+      }
+
+      if (typeof url === 'string' && url.startsWith('/api/lifia-members')) {
+        lifiaEndpointCalled = true;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            members: [
+              {
+                slug: 'leandro-antonelli',
+                uriSuffix: 'LeandroAntonelli',
+                uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/LeandroAntonelli',
+                name: 'Leandro Antonelli',
+                position: 'Investigador',
+                vivoType: 'http://vivoweb.org/ontology/core#FacultyMember',
+                degree: 'Doctor en Ciencias Informáticas',
+                email: 'leandro.antonelli@lifia.info.unlp.edu.ar',
+                tags: 'requirements engineering, artificial intelligence',
+                photoUrl: 'https://lifia.info.unlp.edu.ar/wp-content/uploads/2024/03/lanto.jpg',
+                profileUrl: 'https://memorias.lifia.ar/members/leandro-antonelli'
+              },
+              {
+                slug: 'carine-breidy',
+                uriSuffix: 'CarineBreidy',
+                uri: 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy',
+                name: 'Carine Breidy',
+                position: 'Estudiante de posgrado',
+                vivoType: 'http://vivoweb.org/ontology/core#GraduateStudent',
+                degree: '',
+                email: 'carine.breidy@lifia.info.unlp.edu.ar',
+                tags: '',
+                photoUrl: 'https://centrolifia.wordpress.com/wp-content/uploads/2025/11/foto-carine.jpg',
+                profileUrl: 'https://memorias.lifia.ar/members/carine-breidy'
+              }
+            ],
+            cached: false
+          })
+        });
+      }
+
+      const body = options?.body ? JSON.parse(options.body) : {};
+      const query = body.query || '';
+
+      if (query.includes('INSERT DATA') || query.includes('DELETE WHERE')) {
+        executedSparqlUpdates.push(query);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } })
+      });
+    });
+
+    global.fetch = fetchMock;
+
+    render(<App />);
+
+    const adminTabBtn = await screen.findByText(/Gestión del Catálogo \(Admin\)/i);
+    fireEvent.click(adminTabBtn);
+
+    const lifiaImportBtn = await screen.findByText(/Carga Automática desde Memorias@LIFIA/i);
+    fireEvent.click(lifiaImportBtn);
+
+    await waitFor(() => {
+      expect(lifiaEndpointCalled).toBe(true);
+      expect(screen.getByText('https://memorias.lifia.ar/members')).toBeInTheDocument();
+      expect(screen.getByText('Leandro Antonelli')).toBeInTheDocument();
+      expect(screen.getByText('Carine Breidy')).toBeInTheDocument();
+    });
+
+    const syncBtn = screen.getByText(/Importar \/ Sincronizar Seleccionados \(2\)/i);
+    fireEvent.click(syncBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Se sincronizaron 2 personas desde Memorias@LIFIA en GraphDB/i)).toBeInTheDocument();
+    });
+
+    const insertUpdate = executedSparqlUpdates.find(q => q.includes('INSERT DATA'));
+    expect(insertUpdate).toBeDefined();
+    expect(insertUpdate).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/LeandroAntonelli> rdf:type <http://vivoweb.org/ontology/core#FacultyMember>');
+    expect(insertUpdate).toContain('<https://memorias.lifia.ar/members/leandro-antonelli>');
+    expect(insertUpdate).toContain('<http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/CarineBreidy> rdf:type <http://vivoweb.org/ontology/core#GraduateStudent>');
   });
 
   it('debe permitir abrir la Agenda de Reuniones, listar reuniones periódicas/puntuales con tesistas y abrir su bitácora', async () => {

@@ -5,6 +5,7 @@ import {
   isSparqlUpdate,
   parseCorsOrigins,
   isWeakSuperAdminPassword,
+  parseLifiaMembersHtml,
 } from './security.js';
 
 describe('server/security', () => {
@@ -96,6 +97,33 @@ describe('server/security', () => {
       assert.equal(isWeakSuperAdminPassword('admin123456'), true);
       assert.equal(isWeakSuperAdminPassword('short123'), true);
       assert.equal(isWeakSuperAdminPassword('StrongPassword#2026!'), false);
+    });
+  });
+
+  describe('parseLifiaMembersHtml', () => {
+    it('extrae miembros, cargos, emails, fotos, tags anidados y URLs desde https://memorias.lifia.ar/members', () => {
+      const sampleHtml = `
+        <div class="MuiGrid-root"><a style="text-decoration:none;color:inherit" href="/members/leandro-antonelli"><div class="MuiPaper-root" data-component-semantics="Member directory card"><div><div><img alt="Leandro Antonelli" src="https://lifia.info.unlp.edu.ar/wp-content/uploads/2024/03/lanto.jpg"/></div><div><h3>Leandro<!-- --> <!-- -->Antonelli</h3><span>Investigador</span></div></div><div><div><span>Degree:</span><span>Doctor en Ciencias Informáticas</span></div><div><span>Email:</span><span>leandro.antonelli@lifia.info.unlp.edu.ar</span></div></div><div><a href="/tags/requirements%20engineering"><div><span class="MuiChip-label mui-b9zgoq">#requirements engineering</span></div></a><a href="/tags/artificial%20intelligence"><div><span class="MuiChip-label mui-b9zgoq">#artificial intelligence</span></div></a></div></div></a></div>
+        <div class="MuiGrid-root"><a style="text-decoration:none;color:inherit" href="/members/carine-breidy"><div class="MuiPaper-root" data-component-semantics="Member directory card"><div><div><img alt="Carine Breidy" src="https://centrolifia.wordpress.com/wp-content/uploads/2025/11/foto-carine.jpg"/></div><div><h3>Carine<!-- --> <!-- -->Breidy</h3><span>Estudiante de posgrado</span></div></div><div><div><span>Email:</span><span>carine.breidy@lifia.info.unlp.edu.ar</span></div></div></div></a></div>
+      `;
+
+      const members = parseLifiaMembersHtml(sampleHtml, 'https://memorias.lifia.ar');
+      assert.equal(members.length, 2);
+
+      const carine = members.find(m => m.slug === 'carine-breidy');
+      assert.ok(carine);
+      assert.equal(carine.name, 'Carine Breidy');
+      assert.equal(carine.vivoType, 'http://vivoweb.org/ontology/core#GraduateStudent');
+      assert.equal(carine.profileUrl, 'https://memorias.lifia.ar/members/carine-breidy');
+
+      const leandro = members.find(m => m.slug === 'leandro-antonelli');
+      assert.ok(leandro);
+      assert.equal(leandro.name, 'Leandro Antonelli');
+      assert.equal(leandro.uri, 'http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/LeandroAntonelli');
+      assert.equal(leandro.vivoType, 'http://vivoweb.org/ontology/core#FacultyMember');
+      assert.equal(leandro.email, 'leandro.antonelli@lifia.info.unlp.edu.ar');
+      assert.equal(leandro.tags, 'requirements engineering, artificial intelligence');
+      assert.equal(leandro.profileUrl, 'https://memorias.lifia.ar/members/leandro-antonelli');
     });
   });
 });

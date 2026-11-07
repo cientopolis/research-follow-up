@@ -122,15 +122,36 @@ Actualiza las coordenadas de un nodo en el canvas tras una acción de arrastrar 
     ```
 
 ### 1.5 Eliminar un nodo
-Elimina permanentemente el recurso del nodo y todas las aristas entrantes y salientes para garantizar la integridad referencial.
-*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L647)
-*   **Queries** (ejecutadas en secuencia):
+Diferencia automáticamente entre nodos pertenecientes al **catálogo compartido** (`isSharedCatalogNode`) y nodos **específicos creados por el usuario en su lienzo**:
+*   **Archivo origen**: [App.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/App.tsx#L2262)
+*   **Caso A — Nodo del catálogo compartido (solo se desvincula del lienzo actual, preservando el recurso en el catálogo general)**:
     ```sparql
-    # Eliminar triples salientes
-    DELETE WHERE { <${nodeUri}> ?p ?o . };
+    PREFIX rfu: <http://cientopolis.org/rfu/>
+    PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
+
+    DELETE DATA {
+      <${nodeUri}> rfu:inCanvasOf <${userUri}> .
+      <${nodeUri}> rfu:createdBy <${userUri}> .
+      <${userUri}> rfu:associatedResearcher <${nodeUri}> .
+    };
+    DELETE {
+      <${nodeUri}> ?p ?other .
+    }
+    WHERE {
+      <${nodeUri}> ?p ?other .
+      { ?other rfu:createdBy <${userUri}> } UNION { ?other rfu:inCanvasOf <${userUri}> }
+    };
+    DELETE {
+      ?other ?p <${nodeUri}> .
+    }
+    WHERE {
+      ?other ?p <${nodeUri}> .
+      { ?other rfu:createdBy <${userUri}> } UNION { ?other rfu:inCanvasOf <${userUri}> }
+    }
     ```
+*   **Caso B — Nodo específico del lienzo creado por el usuario (eliminación permanente del recurso y sus aristas)**:
     ```sparql
-    # Eliminar triples entrantes
+    DELETE WHERE { <${nodeUri}> ?p ?o . };
     DELETE WHERE { ?s ?p <${nodeUri}> . }
     ```
 
@@ -380,7 +401,7 @@ Obtiene todos los recursos globales de una categoría (`vivo:FacultyMember`, `vi
     ```
 
 ### 4.2 Importación / Sincronización masiva de personas desde Memorias@LIFIA
-Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://memorias.lifia.info.unlp.edu.ar/members` bajo la URI base `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/`, almacenando únicamente URLs externas (`schema:image`, `schema:url`).
+Actualiza o inserta en lote investigadores y tesistas obtenidos desde `https://memorias.lifia.ar/members` bajo la URI base `http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/`, almacenando únicamente URLs externas (`schema:image`, `schema:url`).
 *   **Archivo origen**: [AdminCatalogPanel.tsx](file:///Users/dtorres/development/research-follow-up/frontend/src/components/AdminCatalogPanel.tsx#L149)
 *   **Queries**:
     ```sparql

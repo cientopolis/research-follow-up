@@ -24,7 +24,24 @@ interface RDFNode {
   photoUrl?: string;
   mindmapContent?: string;
   externalUrl?: string;
+  inCanvasOf?: boolean;
+  createdByMe?: boolean;
 }
+
+const isSharedCatalogNode = (node: RDFNode): boolean => {
+  if (node.inCanvasOf && !node.createdByMe) return true;
+  return (
+    node.type.includes('Conference') ||
+    node.type.includes('Journal') ||
+    node.type.includes('Topic') ||
+    node.type.includes('Dataset') ||
+    node.type.includes('MediaObject') ||
+    node.type.includes('FacultyMember') ||
+    node.type.includes('GraduateStudent') ||
+    node.type.includes('UndergraduateStudent') ||
+    node.type.includes('Project')
+  );
+};
 
 interface RDFConnection {
   id: string;
@@ -2239,25 +2256,18 @@ SELECT ?s ?p ?o WHERE {
     }
   };
 
-  // Delete Node (Removes from user canvas for regular users, deletes globally only if SuperAdmin or personal node)
+  // Delete Node:
+  // - Shared catalog nodes (common to the application): remove ONLY from the current user's canvas.
+  // - Canvas-specific nodes created by a user: delete completely from GraphDB.
   const deleteNode = async () => {
     if (!nodeToDelete || !user) return;
     const userUri = `http://cientopolis.org/rfu/user/${user.uid}`;
-    const isShareableNode = (
-      nodeToDelete.type.includes('Conference') ||
-      nodeToDelete.type.includes('Journal') ||
-      nodeToDelete.type.includes('Topic') ||
-      nodeToDelete.type.includes('Dataset') ||
-      nodeToDelete.type.includes('MediaObject') ||
-      nodeToDelete.type.includes('FacultyMember') ||
-      nodeToDelete.type.includes('GraduateStudent') ||
-      nodeToDelete.type.includes('UndergraduateStudent')
-    );
+    const isCatalogNode = isSharedCatalogNode(nodeToDelete);
 
     let query = '';
 
-    if (isShareableNode && !isSuperAdmin) {
-      // Non-admin user: Remove node ONLY from current user's canvas and clear their user-specific canvas triples
+    if (isCatalogNode) {
+      // Shared catalog node: Remove node ONLY from current user's canvas (preserve in global catalog)
       query = `
         PREFIX rfu: <http://cientopolis.org/rfu/>
         PREFIX ex: <http://cientopolis.lifia.info.unlp.edu.ar/rfu/resource/>
@@ -2265,12 +2275,25 @@ SELECT ?s ?p ?o WHERE {
         DELETE DATA {
           <${nodeToDelete.uri}> rfu:inCanvasOf <${userUri}> .
           <${nodeToDelete.uri}> rfu:createdBy <${userUri}> .
-          <${nodeToDelete.uri}> ex:posX ?x .
-          <${nodeToDelete.uri}> ex:posY ?y .
+          <${userUri}> rfu:associatedResearcher <${nodeToDelete.uri}> .
+        };
+        DELETE {
+          <${nodeToDelete.uri}> ?p ?other .
+        }
+        WHERE {
+          <${nodeToDelete.uri}> ?p ?other .
+          { ?other rfu:createdBy <${userUri}> } UNION { ?other rfu:inCanvasOf <${userUri}> }
+        };
+        DELETE {
+          ?other ?p <${nodeToDelete.uri}> .
+        }
+        WHERE {
+          ?other ?p <${nodeToDelete.uri}> .
+          { ?other rfu:createdBy <${userUri}> } UNION { ?other rfu:inCanvasOf <${userUri}> }
         }
       `;
     } else {
-      // SuperAdmin OR personal node: Delete node and all its triples globally from GraphDB
+      // User-specific canvas node: Delete node and all its triples completely from GraphDB
       query = `
         DELETE WHERE { <${nodeToDelete.uri}> ?p ?o . };
         DELETE WHERE { ?s ?p <${nodeToDelete.uri}> . }
@@ -3708,10 +3731,10 @@ SELECT ?s ?p ?o WHERE {
                                 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                                      Directorio memorias.lifia.info.unlp.edu.ar/members
+                                      Directorio memorias.lifia.ar/members
                                     </span>
                                     <a
-                                      href="https://memorias.lifia.info.unlp.edu.ar/members"
+                                      href="https://memorias.lifia.ar/members"
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       style={{ fontSize: '0.68rem', color: 'var(--color-investigador)' }}
@@ -3728,7 +3751,7 @@ SELECT ?s ?p ?o WHERE {
                                   />
                                   {isLoadingLifiaMembers && (
                                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                      ⏳ Consultando miembros en memorias.lifia.info.unlp.edu.ar/members...
+                                      ⏳ Consultando miembros en https://memorias.lifia.ar/members...
                                     </span>
                                   )}
                                   {lifiaError && (
@@ -5544,24 +5567,18 @@ SELECT ?s ?p ?o WHERE {
             <h2 style={{ color: 'var(--color-proyecto)' }}>⚠️ Advertencia de Eliminación</h2>
             <p>¿Estás seguro de que deseas eliminar el nodo <strong>{nodeToDelete.label}</strong>?</p>
             {(() => {
-              const isShareableNode = (
-                nodeToDelete.type.includes('Conference') ||
-                nodeToDelete.type.includes('Journal') ||
-                nodeToDelete.type.includes('Topic') ||
-                nodeToDelete.type.includes('Dataset') ||
-                nodeToDelete.type.includes('MediaObject')
-              );
+              const isCatalogNode = isSharedCatalogNode(nodeToDelete);
 
-              if (isShareableNode && !isSuperAdmin) {
+              if (isCatalogNode) {
                 return (
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>
-                    ℹ️ Como usuario regular, este nodo <strong>se quitará únicamente de tu lienzo personal</strong>. La conferencia/revista seguirá guardada en el banco general del sistema para que otros investigadores puedan seguir utilizándola.
+                    ℹ️ Este es un nodo del <strong>catálogo compartido</strong>. Al eliminarlo aquí, <strong>se quitará únicamente de tu lienzo</strong> y seguirá disponible en el catálogo general de la aplicación.
                   </p>
                 );
               } else {
                 return (
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Esta acción eliminará el nodo y todas sus conexiones asociadas del Triplestore de forma permanente para todo el sistema. Esta acción no se puede deshacer.
+                    ⚠️ Este es un nodo <strong>específico de tu lienzo</strong>. Esta acción lo eliminará de forma permanente junto con todas sus conexiones asociadas. Esta acción no se puede deshacer.
                   </p>
                 );
               }
